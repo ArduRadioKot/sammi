@@ -1,0 +1,89 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  api:
+    build:
+      context: ./apps/api
+    environment:
+      APP_ENV: ${APP_ENV}
+      API_V1_PREFIX: ${API_V1_PREFIX}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      SECRET_KEY: ${SECRET_KEY}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      FRONTEND_URL: ${FRONTEND_URL}
+      LOG_LEVEL: ${LOG_LEVEL}
+      CREDITS_INITIAL_GRANT: ${CREDITS_INITIAL_GRANT:-1000}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-60}
+      YANDEX_AI_API_KEY: ${YANDEX_AI_API_KEY:-}
+      YANDEX_AI_PROJECT_ID: ${YANDEX_AI_PROJECT_ID:-}
+      YANDEX_AI_BASE_URL: ${YANDEX_AI_BASE_URL:-https://ai.api.cloud.yandex.net/v1}
+      YANDEX_AI_MODEL: ${YANDEX_AI_MODEL:-}
+      GIGACHAT_AUTH_KEY: ${GIGACHAT_AUTH_KEY:-}
+      GIGACHAT_SCOPE: ${GIGACHAT_SCOPE:-GIGACHAT_API_PERS}
+      GIGACHAT_BASE_URL: ${GIGACHAT_BASE_URL:-https://api.giga.chat}
+      GIGACHAT_AUTH_URL: ${GIGACHAT_AUTH_URL:-https://ngw.devices.sberbank.ru:9443/api/v2/oauth}
+      GIGACHAT_MODEL: ${GIGACHAT_MODEL:-}
+      DADATA_API_KEY: ${DADATA_API_KEY:-}
+      DADATA_BASE_URL: ${DADATA_BASE_URL:-https://suggestions.dadata.ru/suggestions/api/4_1/rs}
+      DADATA_TIMEOUT_SECONDS: ${DADATA_TIMEOUT_SECONDS:-15}
+      DADATA_COMPANY_LOOKUP_CREDITS: ${DADATA_COMPANY_LOOKUP_CREDITS:-1}
+      ENRICHMENT_SYNC_MAX_ROWS: ${ENRICHMENT_SYNC_MAX_ROWS:-50}
+      ENRICHMENT_PROVIDER_CONCURRENCY: ${ENRICHMENT_PROVIDER_CONCURRENCY:-5}
+      ENRICHMENT_STORE_RAW_RESPONSES: ${ENRICHMENT_STORE_RAW_RESPONSES:-false}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./apps/api:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    environment:
+      VITE_API_URL: http://localhost:8000
+      VITE_ENABLE_DEMO_DATA: ${VITE_ENABLE_DEMO_DATA:-false}
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - frontend_node_modules:/app/node_modules
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 3000"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  frontend_node_modules:

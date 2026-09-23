@@ -1,0 +1,5 @@
+Company,Formula
+Acme,=1+1
+Beta,+cmd
+Gamma,-sum
+Delta,@SUM(A1)
