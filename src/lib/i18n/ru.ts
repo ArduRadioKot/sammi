@@ -6,6 +6,7 @@ export const ru = {
     tables: "Таблицы",
     people: "Люди",
     companies: "Компании",
+    map: "Карта контактов",
     intelligence: "Intelligence",
     activation: "Activation",
     automation: "Автоматизация",

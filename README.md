@@ -98,7 +98,7 @@ Ollama test generation credits не списывает.
 
 `apps/api/` — FastAPI, async SQLAlchemy, PostgreSQL, Alembic.
 
-Реальные endpoints: health, auth, workspaces, tables/columns/rows, CSV import/export, credits balance/history, AI provider status/models, Ollama test generation, enrichment providers/columns/runs/provenance. AI Column API нет.
+Реальные endpoints: health, auth, workspaces, tables/columns/rows, CSV import/export, credits balance/history, AI provider status/models, Ollama test generation, enrichment providers/columns/runs/provenance, карта контактов (`Nominatim` + кэш в Postgres). AI Column API нет.
 
 ## Tables Architecture
 
@@ -147,6 +147,7 @@ GET   /api/v1/tables/{table_id}/enrichment/runs
 GET   /api/v1/enrichment/runs/{run_id}
 GET   /api/v1/enrichment/runs/{run_id}/attempts
 GET   /api/v1/tables/{table_id}/rows/{row_id}/columns/{column_id}/provenance
+GET   /api/v1/tables/{table_id}/map
 ```
 
 Создать таблицу: `{ "name": "Компании", "object_type": "company" }`. `created_by` берётся из JWT.

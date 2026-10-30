@@ -13,6 +13,7 @@ const TablesPage = lazy(() => import("@/pages/app/tables"));
 const TablePage = lazy(() => import("@/pages/app/table-page"));
 const PeoplePage = lazy(() => import("@/pages/app/people"));
 const CompaniesPage = lazy(() => import("@/pages/app/companies"));
+const MapPage = lazy(() => import("@/pages/app/map"));
 const AudiencesPage = lazy(() => import("@/pages/app/audiences"));
 const SignalsPage = lazy(() => import("@/pages/app/signals"));
 const AgentsPage = lazy(() => import("@/pages/app/agents"));
@@ -133,6 +134,14 @@ function AppRoutes() {
             element={
               <LazyPage>
                 <CompaniesPage />
+              </LazyPage>
+            }
+          />
+          <Route
+            path="map"
+            element={
+              <LazyPage>
+                <MapPage />
               </LazyPage>
             }
           />

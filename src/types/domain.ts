@@ -240,6 +240,28 @@ export interface TableRow {
   cells: Record<string, CellValue>;
 }
 
+export interface MapPoint {
+  rowId: string;
+  lat: number;
+  lon: number;
+  address: string;
+  displayName: string | null;
+}
+
+export interface TableMapPoints {
+  tableId: string;
+  columnId: string;
+  columnName: string;
+  points: MapPoint[];
+  totalRows: number;
+  resolved: number;
+  unresolved: number;
+  geocoded: number;
+  cached: number;
+  geocodeLimitReached: boolean;
+  source: "geocoded" | "cache" | null;
+}
+
 export interface DataTable {
   id: string;
   name: string;

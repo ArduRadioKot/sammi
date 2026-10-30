@@ -6,6 +6,7 @@ import {
   Building2,
   CreditCard,
   House,
+  Map,
   Menu,
   PanelLeft,
   Plug,
@@ -43,6 +44,7 @@ const NAV = [
       { href: "/app/tables", label: ru.nav.tables, icon: Table2 },
       { href: "/app/people", label: ru.nav.people, icon: Users },
       { href: "/app/companies", label: ru.nav.companies, icon: Building2 },
+      { href: "/app/map", label: ru.nav.map, icon: Map },
     ],
   },
   {

@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     dadata_timeout_seconds: float = Field(default=15, gt=0)
     dadata_company_lookup_credits: int = Field(default=1, ge=0)
 
+    geocoding_base_url: str = "https://nominatim.openstreetmap.org"
+    geocoding_user_agent: str = "sammi-beta/0.1 (beta contact map)"
+    geocoding_timeout_seconds: float = Field(default=10, gt=0)
+    geocoding_max_requests: int = Field(default=25, ge=0)
+
     enrichment_sync_max_rows: int = Field(default=50, ge=1)
     enrichment_provider_concurrency: int = Field(default=5, ge=1)
     enrichment_store_raw_responses: bool = False
