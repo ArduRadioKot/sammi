@@ -8,7 +8,6 @@ import type {
   Integration,
   Person,
   Signal,
-  UsageSummary,
 } from "@/types/domain";
 
 export { tablesService, FastApiTablesService, type TablesService } from "@/services/tables";
@@ -45,10 +44,6 @@ export interface CampaignsService {
 export interface IntegrationsService {
   listIntegrations(): Promise<Integration[]>;
   connect(id: string): Promise<Integration>;
-}
-
-export interface UsageService {
-  getUsage(): Promise<UsageSummary>;
 }
 
 function unavailable(message = "This resource is not available yet"): never {
@@ -131,22 +126,5 @@ export const integrationsService: IntegrationsService = {
   },
   async connect() {
     unavailable("Integrations API is not available yet");
-  },
-};
-
-export const usageService: UsageService = {
-  async getUsage() {
-    if (!ENABLE_DEMO_DATA) {
-      return {
-        remaining: 0,
-        usedThisMonth: 0,
-        ai: 0,
-        enrichment: 0,
-        byProvider: [],
-        history: [],
-      };
-    }
-    const { usage } = await demoModule();
-    return usage;
   },
 };

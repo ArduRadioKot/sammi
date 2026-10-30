@@ -6,13 +6,10 @@ import type {
   Campaign,
   CellValue,
   ColumnDefinition,
-  CreditTransaction,
-  DataTable,
   Integration,
   Signal,
   TableRow,
   TableWithRows,
-  UsageSummary,
 } from "@/types/domain";
 
 export const companies = createCompanies(180);
@@ -165,89 +162,6 @@ export function createDemoTable(): TableWithRows {
   };
 }
 
-export const tablesMeta: DataTable[] = [
-  {
-    id: DEMO_TABLE_ID,
-    name: "Российские SaaS-компании",
-    type: "companies",
-    columns: demoColumns,
-    views: [],
-    defaultViewId: "all",
-    rowCount: 180,
-    enrichmentCount: 4,
-    creditsUsed: 2140,
-    owner: "Александр",
-    updatedAt: new Date(now - 1000 * 60 * 18).toISOString(),
-    starred: true,
-  },
-  {
-    id: "fintech-msk",
-    name: "Финтех Москва",
-    type: "companies",
-    columns: [],
-    views: [],
-    defaultViewId: "all",
-    rowCount: 86,
-    enrichmentCount: 3,
-    creditsUsed: 640,
-    owner: "Александр",
-    updatedAt: new Date(now - 1000 * 60 * 80).toISOString(),
-  },
-  {
-    id: "it-100",
-    name: "IT-компании 100+ сотрудников",
-    type: "companies",
-    columns: [],
-    views: [],
-    defaultViewId: "all",
-    rowCount: 240,
-    enrichmentCount: 5,
-    creditsUsed: 3180,
-    owner: "Мария",
-    updatedAt: new Date(now - 1000 * 60 * 140).toISOString(),
-    starred: true,
-  },
-  {
-    id: "potential",
-    name: "Potential customers",
-    type: "custom",
-    columns: [],
-    views: [],
-    defaultViewId: "all",
-    rowCount: 64,
-    enrichmentCount: 2,
-    creditsUsed: 210,
-    owner: "Александр",
-    updatedAt: new Date(now - 1000 * 60 * 400).toISOString(),
-  },
-  {
-    id: "ai-startups",
-    name: "AI startups Russia",
-    type: "companies",
-    columns: [],
-    views: [],
-    defaultViewId: "all",
-    rowCount: 51,
-    enrichmentCount: 2,
-    creditsUsed: 430,
-    owner: "Павел",
-    updatedAt: new Date(now - 1000 * 60 * 900).toISOString(),
-  },
-  {
-    id: "people-saas",
-    name: "ЛПР SaaS",
-    type: "people",
-    columns: [],
-    views: [],
-    defaultViewId: "all",
-    rowCount: 80,
-    enrichmentCount: 2,
-    creditsUsed: 190,
-    owner: "Александр",
-    updatedAt: new Date(now - 1000 * 60 * 50).toISOString(),
-  },
-];
-
 export const signals: Signal[] = [
   { id: "sig1", name: "New vacancies", source: "HeadHunter", tableId: DEMO_TABLE_ID, tableName: "Российские SaaS-компании", companies: 42, frequency: "Ежедневно", lastRun: new Date(now - 1000 * 60 * 40).toISOString(), newEvents: 18, status: "active", description: "Рост вакансий как hiring signal" },
   { id: "sig2", name: "ЕГРЮЛ changes", source: "ЕГРЮЛ", tableId: DEMO_TABLE_ID, tableName: "Российские SaaS-компании", companies: 180, frequency: "Ежедневно", lastRun: new Date(now - 1000 * 60 * 90).toISOString(), newEvents: 6, status: "active", description: "Изменения карточки юрлица" },
@@ -300,33 +214,3 @@ export const integrations: Integration[] = [
   { id: "http-api", name: "HTTP API", category: "automation", description: "Произвольный REST-источник", connected: false },
 ];
 
-const history: CreditTransaction[] = [
-  { id: "tx1", date: new Date(now - 1000 * 60 * 20).toISOString(), action: "Email waterfall", provider: "DaData", rows: 100, credits: 86, user: "Александр" },
-  { id: "tx2", date: new Date(now - 1000 * 60 * 80).toISOString(), action: "AI research", provider: "YandexGPT", rows: 40, credits: 80, user: "Александр" },
-  { id: "tx3", date: new Date(now - 1000 * 60 * 200).toISOString(), action: "Company enrich", provider: "Контур", rows: 60, credits: 120, user: "Мария" },
-  { id: "tx4", date: new Date(now - 1000 * 60 * 400).toISOString(), action: "HH vacancies", provider: "HeadHunter", rows: 42, credits: 42, user: "Александр" },
-  { id: "tx5", date: new Date(now - 1000 * 60 * 900).toISOString(), action: "ICP scoring", provider: "GigaChat", rows: 30, credits: 60, user: "Павел" },
-];
-
-export const usage: UsageSummary = {
-  remaining: 8420,
-  usedThisMonth: 12580,
-  ai: 3120,
-  enrichment: 9460,
-  byProvider: [
-    { provider: "DaData", credits: 4120 },
-    { provider: "Контур", credits: 2880 },
-    { provider: "Yandex AI", credits: 1960 },
-    { provider: "GigaChat", credits: 1160 },
-    { provider: "HeadHunter", credits: 860 },
-  ],
-  history,
-};
-
-export const templates = [
-  { id: "tpl-dm", name: "Find decision makers", description: "Найти CEO / CTO / Head of Sales" },
-  { id: "tpl-saas", name: "Russian SaaS outbound", description: "Companies → enrichment → ЛПР → email waterfall → AI research" },
-  { id: "tpl-tender", name: "Tender monitoring", description: "ЕГРЮЛ + госзакупки + AI classification" },
-  { id: "tpl-hiring", name: "Hiring signal", description: "HH вакансии → growth → ЛПР → CRM" },
-  { id: "tpl-icp", name: "ICP enrichment", description: "Фирмографика, score и qualifying" },
-];
