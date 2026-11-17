@@ -7,6 +7,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 _REPO_ENV = Path(__file__).resolve().parents[4] / ".env"
 
 
+def normalize_asyncpg_url(value: str) -> str:
+    """Accept Render's postgresql:// URL and the local postgresql+asyncpg:// URL."""
+    url = value.strip()
+    scheme, separator, rest = url.partition("://")
+    if separator and scheme in {"postgres", "postgresql"}:
+        return f"postgresql+asyncpg://{rest}"
+    return url
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=(_REPO_ENV, ".env"),
@@ -59,6 +68,11 @@ class Settings(BaseSettings):
     enrichment_sync_max_rows: int = Field(default=50, ge=1)
     enrichment_provider_concurrency: int = Field(default=5, ge=1)
     enrichment_store_raw_responses: bool = False
+
+    @field_validator("database_url")
+    @classmethod
+    def use_async_driver(cls, value: str) -> str:
+        return normalize_asyncpg_url(value)
 
     @field_validator("app_env")
     @classmethod
