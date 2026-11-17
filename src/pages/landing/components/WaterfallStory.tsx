@@ -39,7 +39,7 @@ export function WaterfallStory() {
                   const found = node.status === "found" || node.status === "verified";
                   return (
                     <g key={node.name} opacity={active ? 1 : 0.28}>
-                      <circle cx="140" cy={y} r="4" fill={found && active ? "#E9D2A3" : "currentColor"} />
+                      <circle cx="140" cy={y} r="4" fill={found && active ? "#CDEFB2" : "currentColor"} />
                       <text x="158" y={y + 4} fontSize="11" fill="currentColor">
                         {node.name}
                       </text>
@@ -56,8 +56,8 @@ export function WaterfallStory() {
           </div>
           <ScreenshotReveal active={step >= 1}>
             <ProductFrame
-              src={productShots.waterfall}
-              alt="Конструктор Email waterfall с провайдерами DaData, Контур и статусами поиска"
+              src={productShots.enrichment}
+              alt="Enrichment-колонка с DaData: конфигурация источника и статусы поиска"
               className="max-h-[52svh] object-[70%_20%]"
             />
           </ScreenshotReveal>

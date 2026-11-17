@@ -32,7 +32,7 @@ export function FinalCTA() {
             </StaggerItem>
             <StaggerItem>
               <p className="mt-4 max-w-md text-[15px] text-ink-muted">
-                Demo session без пароля. Таблица, waterfall и сигналы уже внутри.
+                Demo session без пароля. Таблица, enrichment-колонки и карта контактов уже внутри.
               </p>
             </StaggerItem>
             <StaggerItem>

@@ -50,7 +50,7 @@ export default function DashboardPage() {
       <div className="mx-auto max-w-[1180px] px-6 py-6">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="text-[11px] tracking-[0.14em] text-ink-faint uppercase">Home</div>
+            <div className="ds-label text-ink-faint">Рабочее место</div>
             <h1 className="mt-1 text-[22px] font-medium tracking-[-0.03em]">Рабочий контур, {name}</h1>
           </div>
           <div className="flex flex-wrap gap-2">

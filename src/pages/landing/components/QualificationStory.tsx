@@ -28,8 +28,8 @@ export function QualificationStory() {
           <div className="relative z-[2] mt-10">
             <ScreenshotReveal active={step >= 1}>
               <ProductFrame
-                src={productShots.runState}
-                alt="Table Editor во время mock Run: строки компаний, статус enrichment и Score"
+                src={productShots.tableEditor}
+                alt="Таблица после фильтрации: остаются только квалифицированные строки"
                 className="max-h-[52svh] object-[20%_0]"
               />
             </ScreenshotReveal>

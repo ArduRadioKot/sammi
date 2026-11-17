@@ -13,6 +13,7 @@ const TablesPage = lazy(() => import("@/pages/app/tables"));
 const TablePage = lazy(() => import("@/pages/app/table-page"));
 const PeoplePage = lazy(() => import("@/pages/app/people"));
 const CompaniesPage = lazy(() => import("@/pages/app/companies"));
+const StakeholderMapPage = lazy(() => import("@/features/stakeholders/stakeholder-map-page"));
 const MapPage = lazy(() => import("@/pages/app/map"));
 const AudiencesPage = lazy(() => import("@/pages/app/audiences"));
 const SignalsPage = lazy(() => import("@/pages/app/signals"));
@@ -134,6 +135,14 @@ function AppRoutes() {
             element={
               <LazyPage>
                 <CompaniesPage />
+              </LazyPage>
+            }
+          />
+          <Route
+            path="companies/:companyId/stakeholders"
+            element={
+              <LazyPage>
+                <StakeholderMapPage />
               </LazyPage>
             }
           />

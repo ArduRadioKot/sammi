@@ -28,7 +28,7 @@ export function ActivationStory() {
             <StepItem show={step >= 1}>
               <svg viewBox="0 0 360 220" className="mt-8 w-full max-w-md text-[rgba(247,245,239,0.6)]">
                 <DrawLine d="M80 110 H280" active={step >= 1} />
-                <circle cx="80" cy="110" r="5" fill="#E9D2A3" />
+                <circle cx="80" cy="110" r="5" fill="#CDEFB2" />
                 <text x="24" y="96" fontSize="11" fill="currentColor">
                   Qualified record
                 </text>

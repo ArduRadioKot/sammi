@@ -20,8 +20,8 @@ export function AIStory() {
           <div className="mx-auto grid w-full max-w-[1440px] gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
             <ScreenshotReveal active={step >= 0}>
               <ProductFrame
-                src={productShots.aiColumn}
-                alt="Панель AI Column с промптом, моделью и структурированным ответом по компании"
+                src={productShots.addColumn}
+                alt="Структурированные колонки таблицы: enrichment-поля, статусы и score"
                 className="max-h-[52svh] object-[82%_18%]"
               />
             </ScreenshotReveal>

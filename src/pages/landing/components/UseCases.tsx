@@ -13,10 +13,10 @@ const CASES = [
   },
   {
     id: "02",
-    title: "Account Research",
-    body: "AI собирает продукт, рынок и enterprise-признаки.",
-    src: productShots.aiColumn,
-    alt: "AI Column с исследованием продукта, рынка и ICP компании",
+    title: "Geo Intelligence",
+    body: "Контакты клиентов — прямо на карте: из адреса в точку.",
+    src: productShots.map,
+    alt: "Карта контактов клиентов в workspace: интерактивная карта с точками",
   },
   {
     id: "03",
@@ -28,9 +28,9 @@ const CASES = [
   {
     id: "04",
     title: "Enrichment",
-    body: "Waterfall по российским источникам до verified result.",
-    src: productShots.waterfall,
-    alt: "Waterfall-цепочка провайдеров DaData и Контур",
+    body: "DaData через FastAPI — до enriched поля в строке.",
+    src: productShots.enrichment,
+    alt: "Enrichment-колонка с DaData и статусами источников",
   },
   {
     id: "05",

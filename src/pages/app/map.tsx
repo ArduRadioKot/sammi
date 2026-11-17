@@ -75,9 +75,9 @@ function MapCanvas({ points }: { points: TableMapPoints["points"] }) {
       }
       L.circleMarker([point.lat, point.lon], {
         radius: 8,
-        color: "#2563eb",
-        fillColor: "#3b82f6",
-        fillOpacity: 0.85,
+        color: "#128a43",
+        fillColor: "#4fca63",
+        fillOpacity: 0.88,
         weight: 2,
       })
         .bindPopup(text)

@@ -8,7 +8,7 @@ const COLUMNS = [
     links: [
       ["Платформа", "/product"],
       ["Table Editor", "/product"],
-      ["Waterfall", "/product"],
+      ["Enrichment", "/product"],
     ],
   },
   {
@@ -23,7 +23,7 @@ const COLUMNS = [
     title: "Platform",
     links: [
       ["Workspace", "/product"],
-      ["Waterfall", "/product"],
+      ["Contacts Map", "/product"],
       ["Signals", "/product"],
     ],
   },

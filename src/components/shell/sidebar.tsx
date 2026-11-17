@@ -89,11 +89,17 @@ function NavLink({
       aria-current={active ? "page" : undefined}
       onClick={onNavigate}
       className={cn(
-        "flex h-8 items-center gap-2 rounded-[var(--radius-sm)] px-2 text-[13px] transition-colors",
+        "group relative flex h-8 items-center gap-2 rounded-[var(--radius-sm)] px-2 text-[13px] transition-colors",
         collapsed && "justify-center px-0",
         active ? "bg-surface-0 text-ink" : "text-ink-muted hover:bg-surface-0/70 hover:text-ink",
       )}
     >
+      {active && (
+        <span
+          aria-hidden
+          className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-[var(--green-400)]"
+        />
+      )}
       <Icon className="size-4 shrink-0" />
       {!collapsed && <span className="truncate">{label}</span>}
     </Link>
@@ -173,7 +179,7 @@ export function AppSidebar() {
             return (
               <div key={group.section}>
                 {!collapsed && (
-                  <div className="px-2 pb-1 text-[10px] font-medium tracking-[0.14em] text-ink-faint uppercase">
+                  <div className="px-2 pb-1 text-[10.5px] font-medium text-ink-faint">
                     {group.section}
                   </div>
                 )}

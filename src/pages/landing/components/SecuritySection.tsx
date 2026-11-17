@@ -30,7 +30,7 @@ export function SecuritySection() {
           <div className="mt-14 grid gap-10 md:grid-cols-2">
             <div>
               <StepItem show={step >= 1}>
-                <div className="ds-label text-[#E9D2A3]">Available</div>
+                <div className="ds-label text-[#CDEFB2]">Available</div>
               </StepItem>
               <div className="mt-4 divide-y divide-line border-y border-line">
                 {AVAILABLE.map((item, index) => (

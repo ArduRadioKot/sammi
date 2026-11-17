@@ -30,7 +30,7 @@ export function SignalsStory() {
                 step >= 1 + Math.floor(index / 2) ? (
                   <StepItem key={item} show>
                     <div className="flex items-center gap-3 border-b border-line py-3 text-[14px]">
-                      <span className="size-1.5 rounded-full bg-[#E9D2A3]" />
+                      <span className="size-1.5 rounded-full bg-[#CDEFB2]" />
                       <span>{item}</span>
                     </div>
                   </StepItem>
