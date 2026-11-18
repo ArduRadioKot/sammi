@@ -56,7 +56,7 @@ export function LoginPage() {
             {APP_NAME}
           </Link>
           <div>
-            <p className="ds-label text-ink-faint">GTM Intelligence / Russia</p>
+            <p className="ds-label text-ink-faint">Customer Relationship Intelligence</p>
             <h1 className="mt-6 max-w-[8ch] text-[56px] leading-[0.92] font-medium tracking-[-0.05em]">
               Сигнал становится действием.
             </h1>

@@ -34,15 +34,15 @@ void main() {
   float drift = 0.5 + 0.5 * sin(p.y * 1.25 - p.x * 0.32 - t * 0.14);
   float n = fract(sin(dot(floor(gl_FragCoord.xy * 0.35), vec2(12.9898, 78.233))) * 43758.5453);
 
-  vec3 col = mix(u_c3, u_c1, smoothstep(0.16, 0.84, fold));
-  col = mix(col, u_c2, smoothstep(0.22, 0.78, drift));
+  vec3 col = mix(u_c3, u_c1, smoothstep(0.34, 0.66, fold));
+  col = mix(col, u_c2, smoothstep(0.38, 0.65, drift) * 0.44);
   col += (n - 0.5) * u_noise;
 
-  float vignette = smoothstep(1.28, 0.38, length((uv - vec2(0.52, 0.42)) * vec2(1.08, 1.0)));
-  col *= mix(0.7, 1.0, vignette);
+  float vignette = 1.0 - smoothstep(0.42, 0.86, length((uv - vec2(0.56, 0.53)) * vec2(1.08, 1.0)));
+  col *= mix(0.78, 1.0, vignette);
 
-  float bottom = smoothstep(0.0, 0.28, uv.y);
-  col = mix(u_void, col, bottom);
+  float sectionFade = smoothstep(0.0, 0.18, uv.y) * (1.0 - smoothstep(0.9, 1.0, uv.y));
+  col = mix(u_void, col, sectionFade);
 
   gl_FragColor = vec4(col, 1.0);
 }
@@ -80,9 +80,9 @@ export function SilkGradient() {
 
     let program: WebGLProgram | null = null;
     let raf = 0;
-    let running = true;
-    let visible = true;
-    const start = performance.now();
+    let visible = false;
+    let elapsed = 0;
+    let previousTime: number | undefined;
 
     try {
       const vs = compile(gl, gl.VERTEX_SHADER, VERT);
@@ -120,12 +120,16 @@ export function SilkGradient() {
 
     gl.uniform1f(uSpeed, 0.48);
     gl.uniform1f(uScale, 1.05);
-    gl.uniform1f(uNoise, 0.028);
-    gl.uniform3f(uC1, 18 / 255, 58 / 255, 54 / 255);
-    gl.uniform3f(uC2, 12 / 255, 38 / 255, 34 / 255);
-    gl.uniform3f(uC3, 14 / 255, 22 / 255, 34 / 255);
-    gl.uniform3f(uVoid, 4 / 255, 9 / 255, 10 / 255);
-    gl.clearColor(4 / 255, 9 / 255, 10 / 255, 1);
+    gl.uniform1f(uNoise, 0.015);
+    gl.uniform3f(uC1, 36 / 255, 79 / 255, 57 / 255);
+    gl.uniform3f(uC2, 21 / 255, 51 / 255, 37 / 255);
+    gl.uniform3f(uC3, 18 / 255, 30 / 255, 24 / 255);
+    gl.uniform3f(uVoid, 13 / 255, 18 / 255, 14 / 255);
+
+    const draw = () => {
+      gl.uniform1f(uTime, elapsed / 1000);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+    };
 
     const resize = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -135,72 +139,53 @@ export function SilkGradient() {
       canvas.height = Math.max(1, Math.floor(height * dpr));
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.uniform2f(uRes, canvas.width, canvas.height);
-    };
-
-    const draw = (time: number) => {
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      gl.uniform1f(uTime, reduce ? 0 : (time - start) / 1000);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      draw();
     };
 
     const tick = (time: number) => {
-      if (!running) return;
-      if (visible) draw(time);
-      if (!reduce) raf = window.requestAnimationFrame(tick);
+      elapsed += time - (previousTime ?? time);
+      previousTime = time;
+      draw();
+      raf = window.requestAnimationFrame(tick);
+    };
+
+    const updateAnimation = () => {
+      if (visible && !document.hidden && !reduce) {
+        if (!raf) raf = window.requestAnimationFrame(tick);
+        return;
+      }
+      window.cancelAnimationFrame(raf);
+      raf = 0;
+      previousTime = undefined;
     };
 
     const observer = new IntersectionObserver(
       ([entry]) => {
         visible = Boolean(entry?.isIntersecting);
-        if (visible && !reduce) {
-          window.cancelAnimationFrame(raf);
-          raf = window.requestAnimationFrame(tick);
-        }
+        updateAnimation();
       },
       { rootMargin: "80px" },
     );
     observer.observe(canvas);
 
-    const onVisibility = () => {
-      running = !document.hidden;
-      if (running && visible && !reduce) {
-        window.cancelAnimationFrame(raf);
-        raf = window.requestAnimationFrame(tick);
-      }
-    };
-
     resize();
-    draw(start);
     const ro = new ResizeObserver(resize);
     ro.observe(canvas);
-    document.addEventListener("visibilitychange", onVisibility);
-    if (!reduce) raf = window.requestAnimationFrame(tick);
+    document.addEventListener("visibilitychange", updateAnimation);
 
     return () => {
-      running = false;
       window.cancelAnimationFrame(raf);
       observer.disconnect();
       ro.disconnect();
-      document.removeEventListener("visibilitychange", onVisibility);
+      document.removeEventListener("visibilitychange", updateAnimation);
       gl.deleteBuffer(buffer);
       if (program) gl.deleteProgram(program);
     };
   }, [reduce]);
 
   return (
-    <div
-      className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
-      style={{
-        background:
-          "radial-gradient(ellipse at 22% 28%, rgb(16, 48, 46) 0%, transparent 54%), radial-gradient(ellipse at 78% 18%, rgb(12, 34, 30) 0%, transparent 50%), radial-gradient(ellipse at 48% 82%, rgb(14, 20, 32) 0%, transparent 58%), rgb(4, 9, 10)",
-      }}
-    >
-      <canvas
-        ref={canvasRef}
-        aria-hidden
-        className="absolute inset-0 h-full w-full [mask-image:linear-gradient(180deg,#000_72%,transparent)]"
-      />
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(4,9,10,0.42)_0%,transparent_48%)]" />
+    <div className="route-silk pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
+      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
     </div>
   );
 }

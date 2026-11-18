@@ -1,5 +1,5 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
+.taste-skill
 # dependencies
 /node_modules
 /.pnp
@@ -48,3 +48,10 @@ apps/api/.venv/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+# AI agent instructions (local only)
+**/AGENTS.md
+**/CLAUDE.md
+**/SKILL*.md
+**/.cursorrules
+**/.cursor/
+**/.claude/

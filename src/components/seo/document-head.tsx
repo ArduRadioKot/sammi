@@ -12,10 +12,10 @@ export function DocumentHead({
   noIndex?: boolean;
   path?: string;
 }) {
-  const fullTitle = title ? `${title} · ${APP_NAME}` : `${APP_NAME} — Revenue Intelligence`;
+  const fullTitle = title ? `${title} · ${APP_NAME}` : `${APP_NAME} — Customer Relationship Intelligence`;
   const desc =
     description ??
-    "Платформа объединяет поиск компаний, enrichment, AI-research, сигналы и автоматизацию outbound-продаж.";
+    "one-route помогает увидеть структуру принятия решений, ключевые отношения и риски коммуникаций внутри корпоративных клиентов.";
 
   return (
     <Helmet>

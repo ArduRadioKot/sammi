@@ -170,12 +170,12 @@ function selectConfigPayload(config?: ColumnConfig): Record<string, unknown> {
 }
 
 export interface TablesService {
-  listTables(workspaceId: string): Promise<DataTable[]>;
+  listTables(workspaceId: string, signal?: AbortSignal): Promise<DataTable[]>;
   createTable(workspaceId: string, input: CreateTableInput): Promise<DataTable>;
   getTable(tableId: string): Promise<TableWithRows>;
   updateTable(tableId: string, input: { name?: string; description?: string }): Promise<DataTable>;
   deleteTable(tableId: string): Promise<void>;
-  listColumns(tableId: string): Promise<ColumnDefinition[]>;
+  listColumns(tableId: string, signal?: AbortSignal): Promise<ColumnDefinition[]>;
   createColumn(
     tableId: string,
     input: { name: string; type: Step3ColumnType; config?: Record<string, unknown> },
@@ -187,7 +187,7 @@ export interface TablesService {
   ): Promise<ColumnDefinition>;
   deleteColumn(tableId: string, columnId: string): Promise<void>;
   reorderColumns(tableId: string, columnIds: string[]): Promise<ColumnDefinition[]>;
-  listRows(tableId: string, columns: ColumnDefinition[], limit?: number, offset?: number): Promise<{ rows: TableRow[]; total: number }>;
+  listRows(tableId: string, columns: ColumnDefinition[], limit?: number, offset?: number, signal?: AbortSignal): Promise<{ rows: TableRow[]; total: number }>;
   createRow(tableId: string, data?: Record<string, unknown>): Promise<{ id: string; data: Record<string, unknown> }>;
   updateRow(tableId: string, rowId: string, data: Record<string, unknown>): Promise<{ id: string; data: Record<string, unknown> }>;
   deleteRow(tableId: string, rowId: string): Promise<void>;
@@ -198,8 +198,8 @@ export interface TablesService {
 }
 
 export class FastApiTablesService implements TablesService {
-  async listTables(workspaceId: string) {
-    const payload = await apiClient.get<{ items: ApiTable[] }>(`/api/v1/workspaces/${workspaceId}/tables`);
+  async listTables(workspaceId: string, signal?: AbortSignal) {
+    const payload = await apiClient.get<{ items: ApiTable[] }>(`/api/v1/workspaces/${workspaceId}/tables`, signal);
     return payload.items.map((table) => mapTable(table));
   }
 
@@ -233,8 +233,8 @@ export class FastApiTablesService implements TablesService {
     await apiClient.delete(`/api/v1/tables/${tableId}`);
   }
 
-  async listColumns(tableId: string) {
-    const payload = await apiClient.get<{ items: ApiColumn[] }>(`/api/v1/tables/${tableId}/columns`);
+  async listColumns(tableId: string, signal?: AbortSignal) {
+    const payload = await apiClient.get<{ items: ApiColumn[] }>(`/api/v1/tables/${tableId}/columns`, signal);
     return payload.items.map(mapColumn);
   }
 
@@ -270,9 +270,10 @@ export class FastApiTablesService implements TablesService {
     return payload.items.map(mapColumn);
   }
 
-  async listRows(tableId: string, columns: ColumnDefinition[], limit = ROW_PAGE_LIMIT, offset = 0) {
+  async listRows(tableId: string, columns: ColumnDefinition[], limit = ROW_PAGE_LIMIT, offset = 0, signal?: AbortSignal) {
     const payload = await apiClient.get<PaginatedRows>(
       `/api/v1/tables/${tableId}/rows?limit=${limit}&offset=${offset}`,
+      signal,
     );
     return { rows: payload.items.map((row) => mapRow(row, columns)), total: payload.total };
   }

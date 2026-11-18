@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { CircleHelp, Clock3, GitBranch, List, Map as MapIcon, Minus, Plus, RotateCcw, Search, Users, X } from "lucide-react";
+import { CircleHelp, Clock3, GitBranch, List, Map as MapIcon, RotateCcw, Search, SlidersHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/forms";
 import { useAuthStore } from "@/stores/auth-store";
+import { edgeNames, roleNames, stanceNames } from "./graph-labels";
+import { StakeholderGraph } from "./stakeholder-graph";
 import { stakeholderRepository, type Confidence, type InteractionType, type RelationshipType, type StakeholderAccount, type StakeholderContact, type StakeholderEdge, type StakeholderInteraction, type StakeholderPosition, type StakeholderRole, type StakeholderSnapshot, type SyncPreview } from "./repository";
 
-const roleNames: Record<StakeholderRole, string> = { decision_maker: "ЛПР", influencer: "Влияет на выбор", initiator: "Инициатор", user: "Пользователь", technical_expert: "Технический эксперт", procurement: "Закупки", unknown: "Роль неизвестна" };
-const stanceNames: Record<StakeholderPosition, string> = { supportive: "Поддерживает", neutral: "Нейтрально", skeptical: "Скептически", unknown: "Не оценено" };
-const edgeNames: Record<RelationshipType, string> = { reports_to: "Подчинение", influences: "Влияние на решение", collaborates_with: "Сотрудничество", introduced_by: "Познакомил" };
 const interactionNames: Record<InteractionType, string> = { meeting: "Встреча", call: "Звонок", email: "Письмо", event: "Событие", note: "Заметка" };
 const roleOptions = Object.keys(roleNames) as StakeholderRole[];
 const stanceOptions = Object.keys(stanceNames) as StakeholderPosition[];
@@ -17,15 +16,6 @@ const EMPTY_CONTACTS: StakeholderContact[] = [];
 const DATE_ANCHOR = Date.now();
 const dateLabel = (date?: string | null) => date ? new Date(date).toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" }) : "Неизвестно";
 const initials = (name: string) => name.split(" ").slice(0, 2).map((part) => part[0]).join("").toUpperCase();
-const roleColor: Record<StakeholderRole, string> = { decision_maker: "#397f58", influencer: "#4e8d80", initiator: "#668d5a", user: "#90978d", technical_expert: "#66839b", procurement: "#a38752", unknown: "#92938d" };
-
-function relationLine(edge: StakeholderEdge) {
-  if (edge.type === "reports_to") return "stroke-[#52785e]";
-  if (edge.type === "influences") return "stroke-[#438575]";
-  if (edge.type === "introduced_by") return "stroke-[#b18a49]";
-  return "stroke-[#a4aaa1]";
-}
-
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="block space-y-1.5"><span className="text-[11px] text-ink-muted">{label}</span>{children}</label>;
 }
@@ -42,13 +32,13 @@ export default function StakeholderMapPage() {
   const [error, setError] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [view, setView] = useState<"graph" | "list">(() => typeof window !== "undefined" && window.innerWidth < 768 ? "list" : "graph");
-  const [layer, setLayer] = useState<"structure" | "influence">("influence");
+  const [layer, setLayer] = useState<"all" | "structure" | "influence">("all");
   const [query, setQuery] = useState("");
   const [department, setDepartment] = useState("all");
   const [role, setRole] = useState("all");
   const [stance, setStance] = useState("all");
   const [freshness, setFreshness] = useState("all");
-  const [zoom, setZoom] = useState(1);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [tab, setTab] = useState<"overview" | "links" | "history" | "sources">("overview");
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -86,27 +76,37 @@ export default function StakeholderMapPage() {
       (stance === "all" || contact.stance === stance) &&
       (freshness === "all" || (freshness === "stale" ? contact.stale : !contact.stale));
   }), [contacts, query, department, role, stance, freshness]);
-  const visibleIds = new Set(filtered.map((contact) => contact.id));
-  const visibleEdges = (snapshot?.edges ?? []).filter((edge) => visibleIds.has(edge.fromId) && visibleIds.has(edge.toId) && (layer === "structure" ? edge.type === "reports_to" || edge.type === "collaborates_with" : edge.type !== "reports_to"));
-  const activeEdges = (snapshot?.edges ?? []).filter((edge) => layer === "structure" ? edge.type === "reports_to" || edge.type === "collaborates_with" : edge.type !== "reports_to");
-  const neighbours = new Set(selectedId ? activeEdges.filter((edge) => edge.fromId === selectedId || edge.toId === selectedId).flatMap((edge) => [edge.fromId, edge.toId]) : []);
+  const visibleEdges = useMemo(() => {
+    const ids = new Set(filtered.map((contact) => contact.id));
+    return (snapshot?.edges ?? []).filter((edge) => {
+      if (!ids.has(edge.fromId) || !ids.has(edge.toId)) return false;
+      if (layer === "structure") return edge.type === "reports_to" || edge.type === "collaborates_with";
+      if (layer === "influence") return edge.type === "influences" || edge.type === "introduced_by";
+      return true;
+    });
+  }, [filtered, layer, snapshot?.edges]);
   const periodCutoff = DATE_ANCHOR - periodDays * 86400000;
   const activeContacts = contacts.filter((contact) => contact.lastInteractionAt && new Date(contact.lastInteractionAt).getTime() >= periodCutoff).length;
   const departmentGaps = departments.filter((name) => !contacts.some((contact) => contact.department === name && contact.role !== "unknown" && contact.lastInteractionAt && new Date(contact.lastInteractionAt).getTime() >= periodCutoff));
   const staleCount = contacts.filter((contact) => !contact.lastInteractionAt || new Date(contact.lastInteractionAt).getTime() < periodCutoff).length;
   const thinEvidence = (snapshot?.edges ?? []).filter((edge) => edge.confidence !== "verified").length;
+  const activeFilterCount = [department, role, stance, freshness, view === "graph" ? layer : "all"]
+    .filter((filter) => filter !== "all").length;
 
-  const positioned = useMemo(() => {
-    const countByDept: Record<string, number> = {};
-    const deptColumns: Record<string, number> = { Бизнес: 0, ИТ: 1, "Информационная безопасность": 2, Финансы: 3, Закупки: 4 };
-    return new Map(contacts.map((contact) => {
-      const column = deptColumns[contact.department] ?? 0;
-      const row = countByDept[contact.department] ?? 0; countByDept[contact.department] = row + 1;
-      const perColumn = contacts.filter((item) => item.department === contact.department).length;
-      const y = 145 + row * 122 + Math.max(0, (4 - perColumn) * 48);
-      return [contact.id, { x: 126 + column * 232, y }] as const;
-    }));
-  }, [contacts]);
+  const resetFilters = () => {
+    setQuery("");
+    setDepartment("all");
+    setRole("all");
+    setStance("all");
+    setFreshness("all");
+    setLayer("all");
+  };
+
+  const selectContact = (id: string) => {
+    setSelectedId(id);
+    setEditing(false);
+    setTab("overview");
+  };
 
   const saveContact = async (patch: Partial<StakeholderContact>) => {
     if (!snapshot || !selected) return;
@@ -140,36 +140,59 @@ export default function StakeholderMapPage() {
         {!isReadOnly && <><button className="h-8 rounded-[var(--radius-sm)] border border-line px-2.5 text-[12px] hover:bg-surface-1" onClick={openCreateEdge}>Добавить связь</button>
         <button className="h-8 rounded-[var(--radius-sm)] bg-primary px-2.5 text-[12px] text-primary-foreground hover:opacity-90" onClick={() => { if (selected) setModal("interaction"); else setNotice("Сначала выберите контакт."); }}>Зафиксировать встречу</button></>}
       </div>
-      <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        className="inline-flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-line px-2.5 text-xs sm:hidden"
+        aria-expanded={filtersOpen}
+        aria-controls="stakeholder-filters"
+        onClick={() => setFiltersOpen((open) => !open)}
+      >
+        <SlidersHorizontal aria-hidden="true" className="size-3.5" />
+        Фильтры{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
+      </button>
+      <div id="stakeholder-filters" className={`${filtersOpen ? "flex" : "hidden sm:flex"} flex-wrap items-center gap-2`}>
         <label className="sr-only" htmlFor="department-filter">Подразделение</label><select id="department-filter" className="h-8 max-w-[190px] rounded-[var(--radius-sm)] border border-line bg-surface-0 px-2 text-[12px]" value={department} onChange={(e) => setDepartment(e.target.value)}><option value="all">Все подразделения</option>{departments.map((item) => <option key={item}>{item}</option>)}</select>
         <label className="sr-only" htmlFor="role-filter">Роль в решении</label><select id="role-filter" className="h-8 max-w-[190px] rounded-[var(--radius-sm)] border border-line bg-surface-0 px-2 text-[12px]" value={role} onChange={(e) => setRole(e.target.value)}><option value="all">Все роли</option>{roleOptions.map((item) => <option key={item} value={item}>{roleNames[item]}</option>)}</select>
         <label className="sr-only" htmlFor="stance-filter">Отношение</label><select id="stance-filter" className="h-8 rounded-[var(--radius-sm)] border border-line bg-surface-0 px-2 text-[12px]" value={stance} onChange={(e) => setStance(e.target.value)}><option value="all">Любая оценка</option>{stanceOptions.map((item) => <option key={item} value={item}>{stanceNames[item]}</option>)}</select>
         <label className="sr-only" htmlFor="freshness-filter">Свежесть данных</label><select id="freshness-filter" className="h-8 rounded-[var(--radius-sm)] border border-line bg-surface-0 px-2 text-[12px]" value={freshness} onChange={(e) => setFreshness(e.target.value)}><option value="all">Любая свежесть</option><option value="fresh">Недавно на связи</option><option value="stale">Давно не общались</option></select>
-        <div className="ml-auto flex items-center gap-2"><button onClick={() => setLayer(layer === "influence" ? "structure" : "influence")} className="h-8 rounded-[var(--radius-sm)] border border-line px-2.5 text-[12px]">{layer === "influence" ? "Влияние на решение" : "Оргструктура"}</button><button onClick={() => { setQuery(""); setDepartment("all"); setRole("all"); setStance("all"); setFreshness("all"); }} className="flex h-8 items-center gap-1 text-[12px] text-ink-muted hover:text-ink"><RotateCcw className="size-3.5"/>Сбросить</button></div>
+        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+          {view === "graph" && (
+            <select
+              aria-label="Тип связей"
+              className="h-8 rounded-[var(--radius-sm)] border border-line bg-surface-0 px-2 text-[12px]"
+              value={layer}
+              onChange={(event) => setLayer(event.target.value as typeof layer)}
+            >
+              <option value="all">Все связи</option>
+              <option value="structure">Оргструктура</option>
+              <option value="influence">Влияние и знакомства</option>
+            </select>
+          )}
+          <button onClick={resetFilters} className="flex h-8 items-center gap-1 text-[12px] text-ink-muted hover:text-ink">
+            <RotateCcw aria-hidden="true" className="size-3.5" />Сбросить
+          </button>
+        </div>
       </div>
     </div>
-    <div className="min-h-0 flex-1 overflow-hidden">
-      <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_350px]">
-        <section className="flex min-h-0 flex-col overflow-hidden">
-          <div className="flex shrink-0 items-center justify-between gap-2 px-4 py-2.5 text-[12px] md:px-5"><div className="flex items-center gap-2 text-ink-muted"><Users className="size-3.5"/><span>{filtered.length} из {contacts.length} участников</span><span className="hidden text-ink-faint sm:inline">· {visibleEdges.length} связей</span></div><div className="flex gap-1"><button onClick={() => setZoom((value) => Math.max(.65, value - .1))} aria-label="Уменьшить масштаб" className="size-8 rounded border border-line hover:bg-surface-1"><Minus className="mx-auto size-3.5"/></button><span className="flex w-12 items-center justify-center font-mono-data text-[11px]">{Math.round(zoom * 100)}%</span><button onClick={() => setZoom((value) => Math.min(1.35, value + .1))} aria-label="Увеличить масштаб" className="size-8 rounded border border-line hover:bg-surface-1"><Plus className="mx-auto size-3.5"/></button><button onClick={() => setZoom(1)} className="ml-1 h-8 rounded border border-line px-2 text-[11px]">Центрировать</button></div></div>
-          {view === "graph" ? <div className="stakeholder-graph-wrap relative min-h-0 flex-1 overflow-auto bg-[var(--surface-1)]">
-            {filtered.length === 0 ? <EmptyFilter onReset={() => { setQuery(""); setDepartment("all"); setRole("all"); setStance("all"); setFreshness("all"); }}/> : <svg className="stakeholder-graph min-h-full min-w-[920px]" viewBox="0 0 1200 700" role="img" aria-label={`Карта участников ${account.name}`}>
-              <defs><marker id="stakeholder-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent)"/></marker></defs>
-              {departments.map((name, index) => <g key={name}><rect x={12 + index * 232} y="34" width="218" height="630" rx="9" fill={index % 2 ? "var(--surface-0)" : "var(--bg)"} opacity=".62"/><text x={24 + index * 232} y="60" fill="var(--ink-muted)" fontSize="12" fontWeight="500">{name}</text></g>)}
-              <g transform={`translate(${600 * (1 - zoom)} ${350 * (1 - zoom)}) scale(${zoom})`}>
-                {visibleEdges.map((edge) => { const a = positioned.get(edge.fromId), b = positioned.get(edge.toId); if (!a || !b) return null; const curved = a.x === b.x ? 30 : 0; return <g key={edge.id}><path d={`M ${a.x} ${a.y} Q ${(a.x + b.x) / 2} ${(a.y + b.y) / 2 - curved} ${b.x} ${b.y}`} className={`fill-none ${relationLine(edge)}`} strokeWidth="1.6" strokeDasharray={edge.type === "influences" ? "6 5" : edge.type === "introduced_by" ? "2 4" : undefined} markerEnd={edge.type === "influences" || edge.type === "introduced_by" ? "url(#stakeholder-arrow)" : undefined} opacity={edge.confidence === "verified" ? .7 : .32}><title>{edgeNames[edge.type]} · сила {edge.strength ?? "неизвестна"} из 5 · {edge.confidence === "verified" ? "подтверждено" : "не подтверждено"}</title></path></g>; })}
-                {filtered.map((contact) => { const point = positioned.get(contact.id)!; const isSelected = contact.id === selectedId; const isNeighbour = neighbours.has(contact.id); return <g key={contact.id} role="button" tabIndex={0} aria-label={`${contact.name}, ${roleNames[contact.role]}, ${stanceNames[contact.stance]}`} aria-pressed={isSelected} onClick={() => { setSelectedId(contact.id); setTab("overview"); }} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedId(contact.id); setTab("overview"); } }} className="cursor-pointer outline-none">
-                  <rect x={point.x - 98} y={point.y - 32} width="196" height="64" rx="8" fill="var(--surface-0)" stroke={isSelected ? "var(--green-600)" : roleColor[contact.role]} strokeWidth={isSelected ? 2 : 1.2} opacity={selectedId && !isSelected && !isNeighbour ? .5 : 1}/>
-                  <circle cx={point.x - 76} cy={point.y} r="14" fill={roleColor[contact.role]} opacity=".18"/><text x={point.x - 76} y={point.y + 4} textAnchor="middle" fill={roleColor[contact.role]} fontSize="10" fontWeight="600">{initials(contact.name)}</text>
-                  <text x={point.x - 54} y={point.y - 5} fill="var(--ink)" fontSize="11.5" fontWeight="600">{contact.name.length > 19 ? `${contact.name.slice(0, 18)}…` : contact.name}</text>
-                  <text x={point.x - 54} y={point.y + 12} fill="var(--ink-muted)" fontSize="9.5">{roleNames[contact.role]} · {contact.influence ? `влияние ${contact.influence}/5` : "влияние неизвестно"}</text>
-                  <circle cx={point.x + 82} cy={point.y - 21} r="4" fill={contact.stance === "supportive" ? "#398259" : contact.stance === "skeptical" ? "#b7833e" : contact.stance === "neutral" ? "#92978e" : "#d6d7d2"}><title>{stanceNames[contact.stance]}</title></circle>
-                  {contact.stale && <text x={point.x + 73} y={point.y + 23} textAnchor="middle" fill="#a36b35" fontSize="8">давно не общались</text>}
-                </g>; })}
-              </g>
-            </svg>}
-            <div className="absolute bottom-3 left-3 flex flex-wrap gap-x-4 gap-y-1 rounded-[var(--radius-sm)] bg-surface-0/95 px-3 py-2 text-[10px] text-ink-muted"><span className="flex items-center gap-1.5"><i className="h-[2px] w-5 bg-[#52785e]"/>Подчинение</span><span className="flex items-center gap-1.5"><i className="w-5 border-t border-dashed border-[#438575]"/>Влияние</span><span className="flex items-center gap-1.5"><i className="h-[2px] w-5 bg-[#a4aaa1]"/>Сотрудничество</span><span>Точка у имени — позиция к инициативе</span></div>
-          </div> : <div className="min-h-0 flex-1 overflow-auto p-3 md:p-5"><ContactList contacts={filtered} selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setTab("overview"); }}/></div>}
+    <div className="stakeholder-body min-h-0 flex-1">
+      <div className="stakeholder-layout grid min-h-0 grid-cols-1 lg:h-full lg:grid-cols-[minmax(0,1fr)_350px]">
+        <section className="flex min-h-0 flex-col">
+          {filtered.length === 0 ? <EmptyFilter onReset={resetFilters} /> : view === "graph" ? (
+            <StakeholderGraph
+              key={JSON.stringify(filtered.map((contact) => contact.id))}
+              accountName={account.name}
+              contacts={filtered}
+              totalContacts={contacts.length}
+              edges={visibleEdges}
+              departments={departments}
+              selectedId={selectedId}
+              onSelect={selectContact}
+            />
+          ) : (
+            <div className="min-h-0 flex-1 overflow-auto p-3 md:p-5">
+              <ContactList contacts={filtered} selectedId={selectedId} onSelect={selectContact} />
+            </div>
+          )}
         </section>
         <aside className="stakeholder-detail min-h-0 overflow-auto border-t border-line bg-surface-0 lg:border-l lg:border-t-0">
           {selected ? <ContactDetail contact={selected} allContacts={contacts} edges={snapshot.edges} events={snapshot.interactions.filter((event) => event.contactIds.includes(selected.id))} tab={tab} setTab={setTab} editing={editing} setEditing={setEditing} saveContact={saveContact} saving={saving} notice={notice} readOnly={isReadOnly} onAddInteraction={() => setModal("interaction")} onAddEdge={openCreateEdge} onEditEdge={(edge) => { setEdgeToEdit(edge); setModal("edge"); }} onSelectContact={setSelectedId} /> : <div className="p-6 text-sm text-ink-muted">Выберите участника карты.</div>}

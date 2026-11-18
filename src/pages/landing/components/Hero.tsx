@@ -1,79 +1,81 @@
-import { motion, useReducedMotion } from "motion/react";
+import { ArrowDown, ArrowUpRight } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
-import { productShots } from "@/assets/product/shots";
-import { MaskedReveal } from "@/components/motion/MaskedReveal";
-import { ProductFrame } from "@/components/motion/ScreenshotReveal";
-import { motionTokens } from "@/lib/motion/tokens";
-import { SilkGradient } from "@/pages/landing/components/SilkGradient";
+import { Reveal } from "@/components/motion/Reveal";
+import { ProductScreenshot } from "./ProductScreenshot";
+import { SilkGradient } from "./SilkGradient";
+import { stakeholderShot } from "./landingShots";
 
-const LINES = ["РЫНОК", "ЧИТАЕТСЯ", "КАК ТАБЛИЦА."];
+const VIEWS = [
+  {
+    label: "Оргструктура",
+    description: "Подразделения, роли, подчинение и рабочие связи.",
+    shot: stakeholderShot,
+  },
+  {
+    label: "Влияние",
+    description: "Кто влияет на выбор и какие связи подтверждены.",
+    shot: {
+      src: "/product/one-route/influence.webp",
+      preview: "/product/one-route/influence-preview.webp",
+      mobile: "/product/one-route/influence-mobile.webp",
+      width: 2280,
+      height: 1455,
+      title: "Карта ЛПР · Влияние",
+      alt: "Связи влияния между сотрудниками Северного банка и открытая вкладка связей Марии Соколовой.",
+    },
+  },
+];
 
 export function Hero() {
-  const reduce = useReducedMotion();
+  const [selected, setSelected] = useState(0);
+  const view = VIEWS[selected];
 
   return (
-    <section className="relative flex min-h-[100svh] flex-col justify-end overflow-hidden px-5 pt-28 pb-12 lg:justify-center lg:px-10 lg:pb-20">
+    <section className="route-hero">
       <SilkGradient />
-      <div className="relative z-[2] mx-auto grid w-full max-w-[1440px] items-end gap-10 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:items-center">
-        <div>
-          <motion.p
-            className="ds-label text-ink-faint"
-            initial={reduce ? false : { opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: motionTokens.duration.cinematic, delay: 0.18, ease: motionTokens.ease.smooth }}
-          >
-            GTM Intelligence / Russia
-          </motion.p>
-          <h1 className="mt-6 max-w-[11ch] text-[clamp(3.2rem,8vw,8.4rem)] leading-[0.88] font-medium tracking-[-0.055em]">
-            {LINES.map((line, index) => (
-              <MaskedReveal key={line} delay={0.36 + index * 0.18}>
-                <span className="block">{line}</span>
-              </MaskedReveal>
-            ))}
-          </h1>
-          <motion.p
-            className="mt-8 max-w-[38ch] text-[16px] leading-relaxed text-ink-muted"
-            initial={reduce ? false : { opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: motionTokens.duration.cinematic, delay: 0.96, ease: motionTokens.ease.smooth }}
-          >
-            Сырые компании проходят enrichment, research и квалификацию — и уходят в CRM уже как действие.
-          </motion.p>
-          <motion.div
-            className="mt-8 flex flex-wrap gap-3"
-            initial={reduce ? false : { opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: motionTokens.duration.cinematic, delay: 1.14, ease: motionTokens.ease.smooth }}
-          >
-            <Link
-              to="/login"
-              className="inline-flex h-11 min-h-11 items-center rounded-full bg-[#F7F3E8] px-5 text-[13px] font-medium text-[#0A0D0B] hover:-translate-y-px"
-            >
-              Начать бесплатно
-            </Link>
-            <a
-              href="#workspace"
-              className="inline-flex h-11 min-h-11 items-center rounded-full border border-[rgba(247,243,232,0.28)] px-5 text-[13px] text-[#F7F3E8]"
-            >
-              Посмотреть продукт
-            </a>
-          </motion.div>
+      <div className="route-wrap relative">
+        <div className="route-hero-copy">
+          <Reveal>
+            <h1>Понимайте, кто действительно принимает решения</h1>
+          </Reveal>
+          <Reveal delay={0.08} className="route-hero-intro">
+            <p>Карта отношений с корпоративным клиентом показывает, кто влияет на выбор и где команде не хватает контактов.</p>
+            <a className="route-button" href="#relationship-map">Смотреть демо <ArrowDown aria-hidden="true" size={17} /></a>
+          </Reveal>
         </div>
-        <motion.div
-          className="relative [backface-visibility:hidden]"
-          initial={reduce ? false : { opacity: 0, scale: 1.015 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: motionTokens.duration.cinematic, delay: 0.62, ease: motionTokens.ease.smooth }}
-        >
-          <div className="relative z-[2] overflow-hidden rounded-[var(--radius-media)] border border-[rgba(247,245,239,0.1)]">
-            <ProductFrame
-              src={productShots.tableEditor}
-              alt="Таблица компаний с колонками enrichment, AI Research, Intent и Score"
-              className="h-[52vh] min-h-[320px] object-cover object-[12%_18%] lg:h-[68vh]"
-              priority
-            />
-          </div>
-        </motion.div>
+        <Reveal delay={0.12} y={24}>
+          <figure id="relationship-map" className="route-demo">
+            <figcaption className="route-demo-bar">
+              <div>
+                <span className="route-demo-title">Карта ЛПР</span>
+                <span className="route-demo-label">Северный банк · тестовые данные</span>
+              </div>
+              <div className="route-switch" role="group" aria-label="Вид карты ЛПР">
+                {VIEWS.map((item, index) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    aria-pressed={selected === index}
+                    aria-controls="relationship-preview"
+                    onClick={() => setSelected(index)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </figcaption>
+            <div id="relationship-preview">
+              <ProductScreenshot key={view.label} shot={view.shot} priority />
+            </div>
+            <div className="route-demo-caption">
+              <p aria-live="polite">{view.description}</p>
+              <Link className="route-text-link" to="/app/companies/demo-northbank/stakeholders">
+                Открыть демо в приложении <ArrowUpRight aria-hidden="true" size={16} />
+              </Link>
+            </div>
+          </figure>
+        </Reveal>
       </div>
     </section>
   );

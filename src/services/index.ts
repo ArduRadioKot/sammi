@@ -6,7 +6,6 @@ import type {
   Campaign,
   Company,
   Integration,
-  Person,
   Signal,
 } from "@/types/domain";
 
@@ -15,10 +14,6 @@ export { creditsService } from "@/services/credits";
 
 export interface CompaniesService {
   listCompanies(): Promise<Company[]>;
-}
-
-export interface PeopleService {
-  listPeople(): Promise<Person[]>;
 }
 
 export interface SignalsService {
@@ -59,14 +54,6 @@ export const companiesService: CompaniesService = {
     if (!ENABLE_DEMO_DATA) return [];
     const { companies } = await demoModule();
     return companies;
-  },
-};
-
-export const peopleService: PeopleService = {
-  async listPeople() {
-    if (!ENABLE_DEMO_DATA) return [];
-    const { people } = await demoModule();
-    return people;
   },
 };
 
