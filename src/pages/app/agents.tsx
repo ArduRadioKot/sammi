@@ -1,17 +1,13 @@
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/forms";
 import { agentsService } from "@/services";
-import type { Agent, AgentConfig } from "@/types/domain";
-import { AgentDrawer } from "@/features/ai/ai-drawers";
+import type { Agent } from "@/types/domain";
 import { formatDistanceToNow } from "date-fns";
 import { ru as ruLocale } from "date-fns/locale";
 
 export default function AgentsPage() {
   const [items, setItems] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     agentsService.listAgents().then((data) => {
@@ -27,16 +23,13 @@ export default function AgentsPage() {
           <h1 className="text-[22px] font-medium tracking-[-0.03em]">AI-агенты</h1>
           <p className="text-[13px] text-ink-muted">Исследование, scoring и классификация — отдельный шаг после Enrichment</p>
         </div>
-        <Button onClick={() => setOpen(true)}>Create agent</Button>
       </div>
       {loading ? (
         <Skeleton className="mt-4 h-24" />
       ) : items.length === 0 ? (
         <div className="mt-16 text-center">
           <div className="text-[14px] font-medium">AI-агенты ещё не подключены</div>
-          <p className="mt-1 text-[13px] text-ink-muted">
-            Создание агента не сохраняется: backend для агентов появится позже. Сейчас в Table Editor работает Enrichment (DaData).
-          </p>
+          <p className="mt-1 text-[13px] text-ink-muted">Здесь появятся агенты, сохранённые в workspace. Для обогащения таблиц используйте DaData.</p>
         </div>
       ) : (
         <div className="mt-4 overflow-hidden rounded-[var(--radius-md)] border border-line">
@@ -68,14 +61,6 @@ export default function AgentsPage() {
           ))}
         </div>
       )}
-      <AgentDrawer
-        open={open}
-        onOpenChange={setOpen}
-        onSave={(_config: AgentConfig) => {
-          toast.message("AI-агенты появятся позже. Enrichment уже работает в Table Editor.");
-          setOpen(false);
-        }}
-      />
     </div>
   );
 }

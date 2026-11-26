@@ -14,7 +14,7 @@ type ThemeContextValue = {
 const ThemeContext = React.createContext<ThemeContextValue | null>(null);
 
 function getSystemTheme(): ResolvedTheme {
-  if (typeof window === "undefined") return "light";
+  if (typeof window === "undefined") return "dark";
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
@@ -26,9 +26,9 @@ function applyTheme(theme: ThemePreference) {
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = React.useState<ThemePreference>(() => {
-    if (typeof window === "undefined") return "light";
+    if (typeof window === "undefined") return "dark";
     const stored = window.localStorage.getItem(STORAGE_KEY) as ThemePreference | null;
-    return stored ?? "light";
+    return stored ?? "dark";
   });
   const resolvedTheme = theme === "system" ? getSystemTheme() : theme;
 

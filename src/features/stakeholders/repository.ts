@@ -9,6 +9,7 @@ export interface StakeholderContact {
   id: string; accountId: string; name: string; title: string; department: string;
   role: StakeholderRole; influence: number | null; stance: StakeholderPosition;
   relationshipStrength: number | null; relationshipEvidence: string; lastInteractionAt: string | null;
+  lastMeetingAt?: string | null;
   source: string; verifiedAt: string | null; stale: boolean;
 }
 export interface StakeholderEdge {

@@ -73,7 +73,7 @@ class AnalysisService:
             valid_ids = {str(column.id) for column in columns if OUTPUT_CONFIG_KEY not in column.config}
             mapping.update({key: value for key, value in run.column_mapping.items() if value is None or value in valid_ids})
         return AnalysisSetup(
-            model=inference.MODEL, enabled=get_settings().relationship_ai_enabled, can_write=member.role in WRITE_ROLES,
+            model=inference.model_name(), enabled=get_settings().relationship_ai_enabled, can_write=member.role in WRITE_ROLES,
             company_hint=table.name, columns=mapping, run=await self._read_with_datasets(run, table),
             web_search_configured=bool(get_settings().relationship_search_base_url.strip()),
         )
@@ -125,7 +125,7 @@ class AnalysisService:
             await self.session.delete(previous)
             await self.session.flush()
         run = RelationshipAnalysisRun(
-            table_id=table_id, status="queued", progress=10, model=inference.MODEL, created_at=corpus.collected_at,
+            table_id=table_id, status="queued", progress=10, model=inference.model_name(), created_at=corpus.collected_at,
             table_updated_at=captured_at, column_mapping={
                 key: str(value) if value is not None else None
                 for key, value in (detect_columns(columns) | body.columns).items()

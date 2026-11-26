@@ -75,6 +75,11 @@ def local_ollama_url(value: str) -> str:
     raise AppError("RELATIONSHIP_OLLAMA_URL", "Настройте локальный OLLAMA_BASE_URL для Gemma 4.", 503)
 
 
+def model_name() -> str:
+    configured = get_settings().ollama_model.strip()
+    return configured if configured.casefold().startswith("gemma4") else MODEL
+
+
 async def _generate[Output: BaseModel](schema: type[Output], task: str, sources: list[Source]) -> Output:
     settings = get_settings()
     payload = [
@@ -88,7 +93,7 @@ async def _generate[Output: BaseModel](schema: type[Output], task: str, sources:
     prompt = f"{task}\n\nФрагменты:\n{json.dumps(payload, ensure_ascii=False)}"
     timeout = min(MODEL_TIMEOUT, settings.ollama_timeout_seconds)
     async with httpx.AsyncClient(timeout=httpx.Timeout(timeout, connect=min(timeout, 5)), trust_env=False) as client:
-        provider = OllamaProvider(local_ollama_url(settings.ollama_base_url), MODEL, client=client)
+        provider = OllamaProvider(local_ollama_url(settings.ollama_base_url), model_name(), client=client)
         result = await provider.generate_structured(
             json_schema=schema.model_json_schema(), prompt=prompt, system=SYSTEM,
             temperature=0, think=False, num_predict=1500,
@@ -309,4 +314,4 @@ async def answer(corpus: Corpus, question: AskRequest, report: AnalysisReport) -
             source = matching[0]
             items.append(AnswerItem(text="Фрагмент, найденный по вопросу.", status="evidence",
                                     citations=[cite(source, source.text)]))
-    return AnalysisAnswer(model=MODEL, items=items)
+    return AnalysisAnswer(model=model_name(), items=items)

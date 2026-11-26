@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, startTransition } fr
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Map as MapIcon, RefreshCw } from "lucide-react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/forms";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -65,7 +64,28 @@ function MapCanvas({ points }: { points: TableMapPoints["points"] }) {
     layer.clearLayers();
     for (const point of points) {
       const text = document.createElement("div");
-      text.append(`${point.address}`);
+      text.className = "min-w-44 space-y-1";
+      if (point.companyName) {
+        const company = document.createElement("div");
+        company.className = "font-semibold";
+        company.textContent = point.companyName;
+        text.append(company);
+      }
+      if (point.personName) {
+        const person = document.createElement("div");
+        person.textContent = point.personName;
+        text.append(person);
+      }
+      if (point.personTitle) {
+        const title = document.createElement("div");
+        title.className = "text-xs text-gray-500";
+        title.textContent = point.personTitle;
+        text.append(title);
+      }
+      const address = document.createElement("div");
+      address.className = "text-xs text-gray-500";
+      address.textContent = point.address;
+      text.append(address);
       if (point.displayName) {
         const muted = document.createElement("div");
         muted.style.color = "#6b7280";
@@ -75,8 +95,8 @@ function MapCanvas({ points }: { points: TableMapPoints["points"] }) {
       }
       L.circleMarker([point.lat, point.lon], {
         radius: 8,
-        color: "#128a43",
-        fillColor: "#75c985",
+        color: "#3500d3",
+        fillColor: "#967cff",
         fillOpacity: 0.88,
         weight: 2,
       })
@@ -217,7 +237,6 @@ export default function MapPage() {
           disabled={!tableId || mapLoading}
           onClick={() => {
             if (tableId) void loadMap(tableId, columnId, true);
-            toast.info("Обновляю карту");
           }}
         >
           <RefreshCw className="size-4" />

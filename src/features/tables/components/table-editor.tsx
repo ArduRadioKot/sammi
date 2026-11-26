@@ -1,17 +1,11 @@
 import {
   ChevronDown,
-  Columns3,
-  Filter,
-  Group,
   Network,
   Plus,
   Redo2,
   Search,
-  Share,
-  Sparkles,
   Star,
   Undo2,
-  WandSparkles,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -33,13 +27,11 @@ import { AnalysisDatasetTable } from "@/features/tables/components/analysis-data
 import { Spreadsheet } from "@/features/tables/components/spreadsheet";
 import { RowDetails, CellDetails } from "@/features/tables/components/detail-panels";
 import {
-  CrmDialog,
   ExportDialog,
   ImportWizard,
   RunConfirmDialog,
 } from "@/features/tables/components/dialogs";
-import { EnrichmentDrawer, WaterfallDrawer } from "@/features/enrichments/enrichment-drawers";
-import { AgentDrawer, AiColumnDrawer, FormulaDrawer } from "@/features/ai/ai-drawers";
+import { EnrichmentDrawer } from "@/features/enrichments/enrichment-drawers";
 import { applyFilters, applySearch, applySorts } from "@/features/tables/lib/query";
 import type { ColumnDefinition, TableRow } from "@/types/domain";
 import { Skeleton } from "@/components/ui/forms";
@@ -147,7 +139,6 @@ export function TableEditor({ tableId }: { tableId: string }) {
   useEffect(() => {
     if (!commandIntent) return;
     if (commandIntent.action === "add-enrichment") setDrawer({ type: "enrichment" });
-    if (commandIntent.action === "add-ai-column") toast.message("AI Column появится позже");
     if (commandIntent.action === "import") setDrawer({ type: "import" });
     if (commandIntent.action === "search-table") {
       document.getElementById("table-search")?.focus();
@@ -224,17 +215,12 @@ export function TableEditor({ tableId }: { tableId: string }) {
 
   if (table.relationshipSourceId) return <AnalysisDatasetTable key={table.id} table={table} />;
 
-  const soon = (feature: string) => toast.message(`${feature} появится позже`);
-
   const handleAddColumn = async (id: string) => {
     if (id === "enrichment") {
       setDrawer({ type: "enrichment" });
       return;
     }
-    if (!isStep3Type(id)) {
-      soon("Этот тип колонки");
-      return;
-    }
+    if (!isStep3Type(id)) return;
     try {
       const column = await tablesService.createColumn(tableId, {
         name: id === "text" ? "Text" : id === "boolean" ? "Active" : id.charAt(0).toUpperCase() + id.slice(1),
@@ -289,10 +275,7 @@ export function TableEditor({ tableId }: { tableId: string }) {
 
   const persistDuplicate = async (columnId: string) => {
     const column = table.columns.find((item) => item.id === columnId);
-    if (!column || !isStep3Type(column.type)) {
-      soon("Этот тип колонки");
-      return;
-    }
+    if (!column || !isStep3Type(column.type)) return;
     try {
       const created = await tablesService.createColumn(tableId, {
         name: `${column.name} copy`,
@@ -355,10 +338,7 @@ export function TableEditor({ tableId }: { tableId: string }) {
 
   const openRun = (columnId: string) => {
     const column = table.columns.find((item) => item.id === columnId);
-    if (!column || column.type !== "enrichment") {
-      soon("Run / Enrichment");
-      return;
-    }
+    if (!column || column.type !== "enrichment") return;
     if (workspaceId) {
       creditsService.getBalance(workspaceId).then((balance) => setAvailableCredits(balance.available)).catch(() => setAvailableCredits(null));
     }
@@ -425,17 +405,9 @@ export function TableEditor({ tableId }: { tableId: string }) {
           <div className="truncate text-[12px] text-ink-muted">
             Tables / <span className="text-ink">{table.name}</span>
           </div>
-          <button
-            type="button"
-            aria-label="В избранное"
-            onClick={() => {
-              if (isDemo) setStarred(!table.starred);
-              else soon("Избранное");
-            }}
-            className="flex size-8 items-center justify-center"
-          >
+          {isDemo && <button type="button" aria-label="В избранное" onClick={() => setStarred(!table.starred)} className="flex size-8 items-center justify-center">
             <Star className={`size-3.5 ${table.starred ? "fill-warning text-warning" : "text-ink-faint"}`} />
-          </button>
+          </button>}
           <button type="button" className="flex items-center gap-1 text-[13px] font-medium" onClick={() => void renameTable()}>
             {table.name}
             <ChevronDown className="size-3.5 text-ink-muted" />
@@ -455,24 +427,10 @@ export function TableEditor({ tableId }: { tableId: string }) {
           <Button variant="ghost" size="icon" aria-label="Redo" onClick={redo}>
             <Redo2 className="size-4" />
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => soon("Share")}>
-            <Share className="size-3.5" /> Share
-          </Button>
           <Button variant="secondary" size="sm" onClick={() => setDrawer({ type: "export" })}>
             Export
           </Button>
-          <Button
-            variant="accent"
-            size="sm"
-            data-capture="run"
-            onClick={() => {
-              const column = enrichmentColumns[0];
-              if (column) openRun(column.id);
-              else soon("Run / Enrichment");
-            }}
-          >
-            Run
-          </Button>
+          {enrichmentColumns.length > 0 && <Button variant="accent" size="sm" data-capture="run" onClick={() => openRun(enrichmentColumns[0].id)}>Run</Button>}
         </div>
       </header>
 
@@ -500,18 +458,6 @@ export function TableEditor({ tableId }: { tableId: string }) {
           <Button variant="ghost" size="sm" onClick={() => setDrawer({ type: "import" })}>
             Import
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => soon("Filter")}>
-            <Filter className="size-3.5" /> Filter
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => soon("Sort")}>
-            Sort
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => soon("Group")}>
-            <Group className="size-3.5" /> Group
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => soon("Columns")}>
-            <Columns3 className="size-3.5" /> Columns
-          </Button>
           <div className="relative ml-1">
             <Search className="pointer-events-none absolute top-2 left-2 size-3.5 text-ink-faint" />
             <Input
@@ -524,12 +470,6 @@ export function TableEditor({ tableId }: { tableId: string }) {
           </div>
           <Button variant="ghost" size="sm" data-capture="enrich" onClick={() => setDrawer({ type: "enrichment" })}>
             Enrich
-          </Button>
-          <Button variant="ghost" size="sm" data-capture="ai" onClick={() => soon("AI Column")}>
-            <WandSparkles className="size-3.5" /> AI
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => soon("Signals")}>
-            <Sparkles className="size-3.5" /> Signals
           </Button>
         </div>
         <div className="text-[12px] text-ink-muted">
@@ -553,12 +493,9 @@ export function TableEditor({ tableId }: { tableId: string }) {
           onRename={(columnId) => void persistRename(columnId)}
           onDuplicate={(columnId) => void persistDuplicate(columnId)}
           onInsert={(columnId, side) => void persistInsert(columnId, side)}
-          onSort={() => soon("Sort")}
-          onFilter={() => soon("Filter")}
           onHide={hideColumn}
           onDelete={(columnId) => void persistDeleteColumn(columnId)}
           onRunColumn={(columnId) => openRun(columnId)}
-          onGenerate={() => soon("Generate")}
           onResize={resizeColumn}
           onCommitCell={(rowId, columnId, value) => void commitCell(rowId, columnId, value)}
         />
@@ -577,14 +514,8 @@ export function TableEditor({ tableId }: { tableId: string }) {
             >
               Enrich
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => soon("AI Column")}>
-              AI
-            </Button>
             <Button variant="ghost" size="sm" onClick={() => setDrawer({ type: "export" })}>
               Export
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => soon("CRM")}>
-              Send to CRM
             </Button>
             <Button variant="ghost" size="sm" onClick={() => void handleDeleteRows(selectedVisible)}>
               Delete
@@ -607,32 +538,6 @@ export function TableEditor({ tableId }: { tableId: string }) {
         onCreated={(column) => {
           addColumn(mapApiColumn(column));
           toast.success("Enrichment-колонка создана");
-        }}
-      />
-      <WaterfallDrawer open={drawer?.type === "waterfall"} onOpenChange={(open) => !open && setDrawer(null)} />
-      <AiColumnDrawer
-        open={drawer?.type === "ai"}
-        onOpenChange={(open) => !open && setDrawer(null)}
-        columns={table.columns}
-        onSave={() => {
-          setDrawer(null);
-          soon("AI Column");
-        }}
-      />
-      <FormulaDrawer
-        open={drawer?.type === "formula"}
-        onOpenChange={(open) => !open && setDrawer(null)}
-        onSave={() => {
-          setDrawer(null);
-          soon("Formula");
-        }}
-      />
-      <AgentDrawer
-        open={drawer?.type === "agent"}
-        onOpenChange={(open) => !open && setDrawer(null)}
-        onSave={() => {
-          setDrawer(null);
-          soon("AI Research Agent");
         }}
       />
       {drawer?.type === "row" && (
@@ -665,12 +570,6 @@ export function TableEditor({ tableId }: { tableId: string }) {
         open={drawer?.type === "export"}
         onOpenChange={(open) => !open && setDrawer(null)}
         tableId={tableId}
-      />
-      <CrmDialog
-        open={drawer?.type === "crm"}
-        onOpenChange={(open) => !open && setDrawer(null)}
-        count={selectedVisible.length || 0}
-        onSend={() => soon("CRM")}
       />
       <RunConfirmDialog
         open={drawer?.type === "run-confirm"}

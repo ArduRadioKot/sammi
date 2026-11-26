@@ -16,7 +16,6 @@ const ACTIONS: Array<{ id: CommandActionId; label: string; hint?: string }> = [
   { id: "create-table", label: "Создать таблицу" },
   { id: "import", label: "Импорт" },
   { id: "add-enrichment", label: "Добавить enrichment" },
-  { id: "add-ai-column", label: "Добавить AI-колонку" },
   { id: "search-table", label: "Найти в таблице" },
   { id: "go-integrations", label: "Открыть интеграции" },
   { id: "create-audience", label: "Создать аудиторию" },
@@ -47,7 +46,7 @@ export function CommandPalette() {
     else if (id === "create-audience") navigate("/app/audiences");
     else if (id === "create-signal") navigate("/app/signals");
     else if (id === "create-table") navigate("/app/tables");
-    else if (id === "add-enrichment" || id === "add-ai-column" || id === "import" || id === "search-table") {
+    else if (id === "add-enrichment" || id === "import" || id === "search-table") {
       navigate("/app/tables");
     }
     dispatchCommand(id);

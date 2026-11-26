@@ -12,18 +12,10 @@ import type {
 
 type DrawerState =
   | { type: "enrichment" }
-  | { type: "waterfall"; columnId?: string }
-  | { type: "ai"; columnId?: string }
-  | { type: "formula"; columnId?: string }
-  | { type: "agent" }
   | { type: "row"; rowId: string }
   | { type: "cell"; rowId: string; columnId: string }
   | { type: "import" }
   | { type: "export" }
-  | { type: "crm" }
-  | { type: "filter" }
-  | { type: "sort" }
-  | { type: "columns" }
   | { type: "run-confirm"; columnId: string; limit: number }
   | null;
 

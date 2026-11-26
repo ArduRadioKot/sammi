@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
-import { Bot, Send } from "lucide-react";
+import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Sheet } from "@/components/ui/dialog";
 import { Badge, Textarea } from "@/components/ui/forms";
 import { ApiError } from "@/lib/api/errors";
 import { relationshipAnalysis, type AnalysisAnswer, type AnalysisQuestion, type ContactAnalysis } from "@/services/relationship-analysis";
@@ -8,13 +9,15 @@ import { FindingItem } from "./analysis-report";
 import { selectClass } from "./analysis-setup";
 
 export function AnalysisAssistant({
-  tableId, contacts, contactId, onSource, disabled,
+  tableId, contacts, contactId, onSource, disabled, open, onOpenChange,
 }: {
   tableId: string;
   contacts: ContactAnalysis[];
   contactId: string;
   onSource: (id: string) => void;
   disabled: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
   const [question, setQuestion] = useState("");
   const [target, setTarget] = useState("");
@@ -47,11 +50,8 @@ export function AnalysisAssistant({
   };
 
   return (
-    <aside className="min-w-0 space-y-3 rounded-lg border border-line bg-surface-0 p-4 md:p-5">
-      <div className="flex items-center gap-2">
-        <Bot className="size-4 text-accent" aria-hidden="true" />
-        <h2 className="text-base font-medium">Ассистент по клиенту</h2>
-      </div>
+    <Sheet open={open} onOpenChange={onOpenChange} title="ИИ-помощник по клиенту" width={520}>
+      <aside className="flex h-full min-h-[calc(100dvh-80px)] min-w-0 flex-col gap-4">
       <fieldset disabled={disabled || !!pending} className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -80,22 +80,20 @@ export function AnalysisAssistant({
           </div>
         )}
       </fieldset>
-      {turns.length > 0 && (
-        <div className="max-h-[460px] space-y-3 overflow-auto border-t border-line pt-3" role="log" aria-label="История вопросов">
-          {turns.map((turn, index) => (
-            <article key={index} className="space-y-2">
-              <p className="wrap-break-word text-sm font-medium">{turn.question}</p>
-              {turn.answer.items.map((item, itemIndex) => (
-                <div key={itemIndex} className="space-y-1">
-                  {item.status === "hypothesis" && <Badge tone="amber">Без подтверждения</Badge>}
-                  {item.status === "draft" && <Badge tone="blue">Черновик</Badge>}
-                  <FindingItem finding={item} onSource={onSource} />
-                </div>
-              ))}
-            </article>
-          ))}
-        </div>
-      )}
+      <div className="min-h-0 flex-1 space-y-3 overflow-auto border-t border-line pt-3" role="log" aria-label="История вопросов">
+        {turns.map((turn, index) => (
+          <article key={index} className="space-y-2">
+            <p className="wrap-break-word text-sm font-medium">{turn.question}</p>
+            {turn.answer.items.map((item, itemIndex) => (
+              <div key={itemIndex} className="space-y-1">
+                {item.status === "hypothesis" && <Badge tone="amber">Без подтверждения</Badge>}
+                {item.status === "draft" && <Badge tone="blue">Черновик</Badge>}
+                <FindingItem finding={item} onSource={onSource} />
+              </div>
+            ))}
+          </article>
+        ))}
+      </div>
       {pending && <p role="status" className="text-sm text-ink-muted">Обрабатываю запрос…</p>}
       {error && <p role="alert" className="text-sm text-danger">{error}</p>}
       <form onSubmit={submit} className="space-y-2">
@@ -110,6 +108,7 @@ export function AnalysisAssistant({
         </Button>
       </form>
       {disabled && <p className="text-xs text-ink-muted">Для вопросов нужен актуальный отчёт.</p>}
-    </aside>
+      </aside>
+    </Sheet>
   );
 }

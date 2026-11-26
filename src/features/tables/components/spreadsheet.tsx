@@ -1,15 +1,11 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { getCoreRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
 import {
-  ArrowDown,
-  ArrowUp,
   Copy,
   EyeOff,
-  Filter,
   IdCard,
   Pencil,
   Play,
-  Sparkles,
   Trash2,
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
@@ -41,12 +37,9 @@ export function Spreadsheet({
   onRename,
   onDuplicate,
   onInsert,
-  onSort,
-  onFilter,
   onHide,
   onDelete,
   onRunColumn,
-  onGenerate,
   onResize,
   onCommitCell,
 }: {
@@ -62,12 +55,9 @@ export function Spreadsheet({
   onRename: (columnId: string) => void;
   onDuplicate: (columnId: string) => void;
   onInsert: (columnId: string, side: "left" | "right") => void;
-  onSort: (columnId: string, direction: "asc" | "desc") => void;
-  onFilter: (columnId: string) => void;
   onHide: (columnId: string) => void;
   onDelete: (columnId: string) => void;
   onRunColumn: (columnId: string) => void;
-  onGenerate: (columnId: string) => void;
   onResize: (columnId: string, width: number) => void;
   onCommitCell?: (rowId: string, columnId: string, value: unknown) => void;
 }) {
@@ -143,26 +133,12 @@ export function Spreadsheet({
                   <DropdownMenuItem onSelect={() => onInsert(column.id, "left")}>Insert left</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => onInsert(column.id, "right")}>Insert right</DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onSelect={() => onSort(column.id, "asc")}>
-                    <ArrowUp className="size-3.5" /> Sort A→Z
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => onSort(column.id, "desc")}>
-                    <ArrowDown className="size-3.5" /> Sort Z→A
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => onFilter(column.id)}>
-                    <Filter className="size-3.5" /> Filter
-                  </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => onHide(column.id)}>
                     <EyeOff className="size-3.5" /> Hide
                   </DropdownMenuItem>
-                  {column.type === "enrichment" || column.config?.kind === "waterfall" ? (
+                  {column.type === "enrichment" ? (
                     <DropdownMenuItem onSelect={() => onRunColumn(column.id)}>
                       <Play className="size-3.5" /> Run column
-                    </DropdownMenuItem>
-                  ) : null}
-                  {column.type === "ai" ? (
-                    <DropdownMenuItem onSelect={() => onGenerate(column.id)}>
-                      <Sparkles className="size-3.5" /> Generate
                     </DropdownMenuItem>
                   ) : null}
                   <DropdownMenuSeparator />

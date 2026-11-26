@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, RotateCcw } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, MessageSquareText, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, Sheet } from "@/components/ui/dialog";
 import { Badge, Skeleton } from "@/components/ui/forms";
@@ -33,6 +33,8 @@ function AnalysisPage({ tableId }: { tableId: string }) {
   const [columns, setColumns] = useState<ColumnDefinition[]>([]);
   const [run, setRun] = useState<AnalysisRun | null>(null);
   const [configure, setConfigure] = useState(false);
+  const [showExtended, setShowExtended] = useState(false);
+  const [showAssistant, setShowAssistant] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [selected, setSelected] = useState<{ runId: string; id: string } | null>(null);
@@ -280,15 +282,24 @@ function AnalysisPage({ tableId }: { tableId: string }) {
             )}
             {!run && !setup.can_write && <p className="text-sm text-ink-muted">Для этой таблицы ещё нет отчёта.</p>}
             {run && report && (
-              <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(320px,360px)]" key={run.id}>
-                <ReportView run={run} report={report} contactId={contactId} onSource={setSourceId}
+              <section className="space-y-4" key={run.id}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="text-xl font-medium tracking-tight">{report.company}</h2>
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="secondary" onClick={() => setShowAssistant(true)}>
+                      <MessageSquareText aria-hidden="true" /> ИИ-помощник
+                    </Button>
+                    <Button variant="accent" onClick={() => setShowExtended(true)}>
+                      Расширенный анализ <ArrowUpRight aria-hidden="true" />
+                    </Button>
+                  </div>
+                </div>
+                <ReportView mode="overview" run={run} report={report} contactId={contactId} onSource={setSourceId}
                   onContact={(id) => setSelected({ runId: run.id, id })}
                   onReview={(item) => setReviewItem({ runId: run.id, item })}
                   canApprove={setup.can_write && setup.enabled && !active && !run.stale && !saving}
                   onApproveRelationship={(proposalId) => void approveRelationship(proposalId)} />
-                <AnalysisAssistant tableId={tableId} contacts={report.contacts} contactId={contactId}
-                  onSource={setSourceId} disabled={run.stale || !setup.enabled} />
-              </div>
+              </section>
             )}
           </>
         )}
@@ -311,6 +322,24 @@ function AnalysisPage({ tableId }: { tableId: string }) {
           </div>
         </DialogContent>
       </Dialog>
+      {run && report && (
+        <Dialog open={showExtended} onOpenChange={setShowExtended}>
+          <DialogContent title={`Расширенный анализ · ${report.company}`} className="w-[min(1240px,calc(100%-24px))] max-h-[94dvh] overflow-y-auto p-4 sm:p-6">
+            <div className="space-y-6">
+              <ReportView mode="extended" run={run} report={report} contactId={contactId} onSource={setSourceId}
+                onContact={(id) => setSelected({ runId: run.id, id })}
+                onReview={(item) => setReviewItem({ runId: run.id, item })}
+                canApprove={!!setup?.can_write && !!setup.enabled && !active && !run.stale && !saving}
+                onApproveRelationship={(proposalId) => void approveRelationship(proposalId)} />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+      {run && report && (
+        <AnalysisAssistant tableId={tableId} contacts={report.contacts} contactId={contactId}
+          onSource={setSourceId} disabled={run.stale || !setup?.enabled}
+          open={showAssistant} onOpenChange={setShowAssistant} />
+      )}
     </div>
   );
 }

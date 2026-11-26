@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { Network } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { Network, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/forms";
 import { StakeholderGraph } from "@/features/stakeholders/stakeholder-graph";
@@ -27,11 +27,15 @@ const edgeTypes: Record<string, RelationshipType> = {
   introduced_by: "introduced_by", "знакомство": "introduced_by",
 };
 
-export function FindingItem({ finding, onSource }: { finding: Finding; onSource: (id: string) => void }) {
+export function FindingItem({ finding, onSource, expandSources }: {
+  finding: Finding;
+  onSource: (id: string) => void;
+  expandSources?: boolean;
+}) {
   return (
     <div className="rounded-md bg-surface-1 p-3 text-sm">
       <p className="wrap-break-word whitespace-pre-line">{finding.text}</p>
-      <Sources citations={finding.citations} onSource={onSource} />
+      <Sources citations={finding.citations} onSource={onSource} expanded={expandSources} />
     </div>
   );
 }
@@ -47,7 +51,7 @@ function FindingList({ title, findings, onSource }: { title: string; findings: F
 }
 
 export function ReportView({
-  run, report, contactId, onContact, onSource, onReview, onApproveRelationship, canApprove,
+  run, report, contactId, onContact, onSource, onReview, onApproveRelationship, canApprove, mode = "extended",
 }: {
   run: AnalysisRun;
   report: AnalysisReport;
@@ -57,16 +61,26 @@ export function ReportView({
   onReview: (item: ReviewItem) => void;
   onApproveRelationship: (proposalId: string) => void;
   canApprove: boolean;
+  mode?: "overview" | "extended";
 }) {
   const [showGraph, setShowGraph] = useState(true);
+  const profileRef = useRef<HTMLElement>(null);
   const contact = report.contacts.find((item) => item.id === contactId) ?? report.contacts[0];
   const roleCoverage = report.key_roles !== null;
-  const { contacts, edges, departments } = useMemo(() => {
+  const firstPublication = contact.public_events.find((event) => event.citations.some((source) => source.url)) ?? contact.public_events[0];
+  const otherPublications = contact.public_events.filter((event) => event !== firstPublication);
+  const search = report.web_search;
+  const { contacts, edges, departments, publicationCounts } = useMemo(() => {
+    const reportDate = Date.parse((report.generated_at ?? run.created_at).slice(0, 10));
     const contacts: StakeholderContact[] = report.contacts.map((item) => ({
       id: item.id, accountId: run.id, name: item.name, title: item.title, department: item.department || "Без подразделения",
       role: item.decision_role, influence: item.influence_level === null ? null : Math.max(1, Math.ceil(item.influence_level * 5)),
       stance: "unknown", relationshipStrength: null, relationshipEvidence: "", lastInteractionAt: item.last_touch_at,
-      source: "Таблица клиента", verifiedAt: item.role_confirmed ? run.created_at : null, stale: run.stale,
+      lastMeetingAt: item.interactions.filter((interaction) => /meeting|встреч/i.test(interaction.channel ?? ""))
+        .map((interaction) => interaction.occurred_at).filter((value): value is string => Boolean(value))
+        .sort((left, right) => right.localeCompare(left))[0] ?? null,
+      source: "Таблица клиента", verifiedAt: item.role_confirmed ? run.created_at : null,
+      stale: item.last_touch_at !== null && reportDate - Date.parse(item.last_touch_at) >= 90 * 86_400_000,
     }));
     const edges: StakeholderEdge[] = report.connections.flatMap((item) => {
       const type = edgeTypes[item.scope.toLowerCase().trim()];
@@ -76,8 +90,73 @@ export function ReportView({
         strength: null, confidence: "verified", evidence: item.scope, updatedAt: run.created_at,
       }];
     });
-    return { contacts, edges, departments: [...new Set(contacts.map((item) => item.department))] };
-  }, [report, run.id, run.stale, run.created_at]);
+    return {
+      contacts, edges, departments: [...new Set(contacts.map((item) => item.department))],
+      publicationCounts: new Map(report.contacts.map((item) => [item.id, item.public_events.length])),
+    };
+  }, [report, run.id, run.created_at]);
+
+  const selectOnMap = (id: string) => {
+    onContact(id);
+    const profile = profileRef.current;
+    if (!profile) return;
+    profile.scrollTop = 0;
+    if (!window.matchMedia("(min-width: 1024px)").matches) {
+      profile.scrollIntoView({ block: "start" });
+    }
+  };
+
+  if (mode === "overview") {
+    return (
+      <div className="space-y-3" data-ui="analysis-overview">
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            ["Контакты", String(report.contacts.length)],
+            ["Покрытие", percentage(report.coverage_score)],
+            ["Отношения", percentage(report.relationship_score)],
+          ].map(([label, value]) => (
+            <div key={label} className="min-h-24 bg-surface-0 p-4 sm:p-5">
+              <p className="text-sm text-ink-muted">{label}</p>
+              <p className="mt-2 text-3xl font-medium tabular-nums tracking-tight">{value}</p>
+            </div>
+          ))}
+        </div>
+        <section className="grid min-h-[430px] overflow-hidden bg-surface-0 xl:grid-cols-[minmax(0,1fr)_340px]" aria-label="Карта влияния">
+          <div className="stakeholder-page flex h-[min(64dvh,700px)] min-h-[430px] min-w-0 flex-col overflow-hidden">
+            <StakeholderGraph accountName={report.company} contacts={contacts} totalContacts={contacts.length} edges={edges}
+              departments={departments} selectedId={contact.id} onSelect={selectOnMap} publicationCounts={publicationCounts} />
+          </div>
+          <aside className="space-y-4 border-t border-line p-4 xl:border-l xl:border-t-0" aria-label="Карточка контакта на карте">
+            <label className="grid gap-1 text-sm text-ink-muted">
+              Контакт
+              <select className={selectClass} value={contact.id} onChange={(event) => onContact(event.target.value)}>
+                {report.contacts.map((item) => <option key={item.id} value={item.id}>{item.name}{item.title && ` · ${item.title}`}</option>)}
+              </select>
+            </label>
+            <div>
+              <h2 className="text-xl font-medium">{contact.name}</h2>
+              <p className="mt-1 text-sm text-ink-muted">{[contact.title, contact.department].filter(Boolean).join(" · ")}</p>
+              <div className="mt-3 flex flex-wrap gap-2"><Badge tone="blue">{roles[contact.decision_role]}</Badge><Badge>{trends[contact.relationship_trend]}</Badge></div>
+            </div>
+            <RecommendedAction contact={contact} generatedAt={report.generated_at ?? run.created_at} onSource={onSource} />
+            <dl className="grid grid-cols-2 gap-3 border-t border-line pt-4 text-sm">
+              <div><dt className="text-ink-muted">Влияние</dt><dd className="mt-1 font-medium">{percentage(contact.influence_level)}</dd></div>
+              <div><dt className="text-ink-muted">Касания за 90 дней</dt><dd className="mt-1 font-medium">{contact.touches_90d}</dd></div>
+              <div><dt className="text-ink-muted">Последний контакт</dt><dd className="mt-1 font-medium">{dateLabel(contact.last_touch_at)}</dd></div>
+              <div><dt className="text-ink-muted">Публичные события</dt><dd className="mt-1 font-medium">{contact.public_events.length}</dd></div>
+            </dl>
+            <FindingList title="Профессиональные темы" findings={contact.professional_topics} onSource={onSource} />
+          </aside>
+        </section>
+        <div className="grid gap-3 md:grid-cols-2">
+          {[...report.account_risks.slice(0, 2), ...report.alerts.slice(0, 2)].slice(0, 4).map((finding, index) => (
+            <FindingItem key={index} finding={finding} onSource={onSource} />
+          ))}
+        </div>
+        {report.review.some((item) => !item.decision) && <p className="bg-warning-soft p-4 text-sm">Источников ждут проверки · {report.review.filter((item) => !item.decision).length}</p>}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -97,27 +176,60 @@ export function ReportView({
       </div>
       <div className="space-y-4 rounded-lg border border-line bg-surface-0 p-4 md:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-base font-medium">Карта решений</h2>
+          <h2 className="text-base font-medium">Карта влияния</h2>
           <Button size="sm" variant="secondary" aria-expanded={showGraph} onClick={() => setShowGraph(!showGraph)}>
             <Network />{showGraph ? "Скрыть граф" : "Показать граф"}
           </Button>
         </div>
-        {showGraph && (
-          <div className="flex h-[min(70dvh,660px)] min-h-[420px] flex-col overflow-hidden rounded-md border border-line">
-            <StakeholderGraph accountName={report.company} contacts={contacts} totalContacts={contacts.length} edges={edges}
-              departments={departments} selectedId={contact.id} onSelect={onContact} />
-          </div>
+        {search && (
+          <a href="#relationship-sources" className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-line bg-surface-1 px-3 py-2 text-xs hover:border-accent">
+            <Search className="size-3.5 text-accent" aria-hidden="true" />
+            <span className="font-medium text-accent">Веб-поиск</span>
+            <span className="text-ink-muted">Проверено {search.searched_contacts} из {search.total_contacts} · Найденные ссылки · {search.discovered}</span>
+            {search.checked_at && <time className="text-ink-muted" dateTime={search.checked_at}>{dateLabel(search.checked_at)}</time>}
+          </a>
         )}
-        <label className="grid gap-1 text-xs text-ink-muted">
-          Контакт
-          <select className={selectClass} value={contact.id} onChange={(event) => onContact(event.target.value)}>
-            {report.contacts.map((item) => <option key={item.id} value={item.id}>{item.name}{item.title && ` · ${item.title}`}</option>)}
-          </select>
-        </label>
-        <div className="flex flex-wrap gap-2">
-          <Badge tone="blue">{roles[contact.decision_role]}</Badge>
-          {!contact.role_confirmed && contact.decision_role !== "unknown" && <Badge tone="amber">Роль требует проверки</Badge>}
-          {contact.department && <Badge>{contact.department}</Badge>}
+        <div className={showGraph ? "grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(260px,33%)]" : "grid"}>
+          {showGraph && (
+            <div className="stakeholder-page flex h-[min(70dvh,660px)] min-h-[420px] min-w-0 flex-col overflow-hidden rounded-md border border-line">
+              <StakeholderGraph accountName={report.company} contacts={contacts} totalContacts={contacts.length} edges={edges}
+                departments={departments} selectedId={contact.id} onSelect={selectOnMap} publicationCounts={publicationCounts} />
+            </div>
+          )}
+          <aside ref={profileRef} aria-label="Карточка контакта на карте"
+            className={`min-w-0 scroll-mt-14 space-y-3 rounded-md border border-line p-3${showGraph ? " lg:max-h-[min(70dvh,660px)] lg:min-h-[420px] lg:overflow-y-auto" : ""}`}>
+            <label className="grid gap-1 text-xs text-ink-muted">
+              Контакт
+              <select className={selectClass} value={contact.id} onChange={(event) => onContact(event.target.value)}>
+                {report.contacts.map((item) => <option key={item.id} value={item.id}>{item.name}{item.title && ` · ${item.title}`}</option>)}
+              </select>
+            </label>
+            <div>
+              <h3 className="wrap-break-word text-base font-medium">{contact.name}</h3>
+              {contact.title && <p className="text-xs text-ink-muted">{contact.title}</p>}
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <Badge tone="blue">{roles[contact.decision_role]}</Badge>
+                {!contact.role_confirmed && contact.decision_role !== "unknown" && <Badge tone="amber">Роль требует проверки</Badge>}
+                {contact.department && <Badge>{contact.department}</Badge>}
+              </div>
+            </div>
+            <section key={contact.id} className="space-y-2 border-t border-line pt-3">
+              <h4 className="text-sm font-medium">Публичные события · {contact.public_events.length}</h4>
+              {contact.profile_confidence !== null && <p className="text-xs text-ink-muted">Лучшее совпадение профиля · {percentage(contact.profile_confidence)}</p>}
+              {firstPublication
+                ? <FindingItem finding={firstPublication} onSource={onSource} expandSources />
+                : <p className="text-xs text-ink-muted">Для контакта пока нет подтверждённых публикаций.</p>}
+              {otherPublications.length > 0 && (
+                <details className="space-y-2">
+                  <summary className="cursor-pointer text-xs text-accent">Другие публикации · {otherPublications.length}</summary>
+                  {otherPublications.map((finding, index) => <FindingItem key={index} finding={finding} onSource={onSource} />)}
+                </details>
+              )}
+            </section>
+            <RecommendedAction contact={contact} generatedAt={report.generated_at ?? run.created_at} onSource={onSource} />
+            <FindingList title="Профессиональные темы" findings={contact.professional_topics} onSource={onSource} />
+            <FindingList title="Упомянутые технологии" findings={contact.technologies} onSource={onSource} />
+          </aside>
         </div>
         <Sources citations={contact.role_evidence} onSource={onSource} />
         <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-y border-line py-3 sm:grid-cols-3">
@@ -153,9 +265,6 @@ export function ReportView({
             </ul>
           </details>
         )}
-        <RecommendedAction contact={contact} generatedAt={report.generated_at ?? run.created_at} onSource={onSource} />
-        <FindingList title="Профессиональные темы" findings={contact.professional_topics} onSource={onSource} />
-        <FindingList title="Упомянутые технологии" findings={contact.technologies} onSource={onSource} />
         {contact.interactions.length > 0 && (
           <details className="space-y-3">
             <summary className="cursor-pointer text-sm font-medium">История взаимодействий</summary>
@@ -181,13 +290,6 @@ export function ReportView({
           <FindingList title="Должности" findings={contact.job_titles} onSource={onSource} />
           <FindingList title="Выраженные позиции" findings={contact.positions} onSource={onSource} />
         </details>
-        {contact.public_events.length > 0 && (
-          <details className="space-y-3">
-            <summary className="cursor-pointer text-sm font-medium">Публичные события · {contact.public_events.length}</summary>
-            {contact.profile_confidence !== null && <p className="text-xs text-ink-muted">Лучшее совпадение профиля · {percentage(contact.profile_confidence)}</p>}
-            <FindingList title="Подтверждённые источники" findings={contact.public_events} onSource={onSource} />
-          </details>
-        )}
       </div>
       {(report.departments.length > 0 || report.account_loyalty) && (
         <section className="space-y-3 rounded-lg border border-line bg-surface-0 p-4 md:p-5">
@@ -211,7 +313,7 @@ export function ReportView({
         </section>
       )}
       {(report.feeds.length > 0 || report.recordings.length > 0 || report.web_search) && (
-        <section className="space-y-3 rounded-lg border border-line bg-surface-0 p-4 md:p-5">
+        <section id="relationship-sources" className="space-y-3 rounded-lg border border-line bg-surface-0 p-4 md:p-5">
           <h2 className="text-base font-medium">Поиск и сбор источников</h2>
           <ul className="space-y-2 text-sm">
             {report.web_search && (

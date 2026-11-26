@@ -4,7 +4,10 @@ from pathlib import Path
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_REPO_ENV = Path(__file__).resolve().parents[4] / ".env"
+_REPO_ENV = next(
+    (parent / ".env" for parent in Path(__file__).resolve().parents if (parent / ".env").is_file()),
+    Path(".env"),
+)
 
 
 def normalize_asyncpg_url(value: str) -> str:

@@ -11,7 +11,7 @@ import httpx
 
 from app.core.config import get_settings
 from app.core.errors import AppError
-from app.services.relationship.inference import MODEL, local_ollama_url
+from app.services.relationship.inference import local_ollama_url, model_name
 from app.services.relationship.text import clean
 
 AUDIO_FORMATS = {".wav": "wav", ".mp3": "mp3", ".m4a": "mov", ".ogg": "ogg", ".flac": "flac", ".aac": "aac"}
@@ -91,7 +91,7 @@ async def transcribe(encoded: str, suffix: str) -> list[Segment]:
             try:
                 response = await client.post(
                     url, files={"file": ("clip.wav", _wav(part), "audio/wav")},
-                    data={"model": MODEL, "response_format": "json"},
+                    data={"model": model_name(), "response_format": "json"},
                 )
             except httpx.HTTPError as exc:
                 raise AppError("RELATIONSHIP_AUDIO_PROVIDER", "Ollama не завершил распознавание записи.", 503) from exc

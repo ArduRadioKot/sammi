@@ -65,6 +65,15 @@ def _query_hash(query: str) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
+def _has_label(column: TableColumn, tokens: tuple[str, ...]) -> bool:
+    name = " ".join(column.name.casefold().split())
+    return any(token in name for token in tokens)
+
+
+def _find_label_column(columns: list[TableColumn], tokens: tuple[str, ...]) -> TableColumn | None:
+    return next((column for column in columns if _has_label(column, tokens)), None)
+
+
 class MapService:
     """Build map points for a table by geocoding one address column."""
 
@@ -101,7 +110,7 @@ class MapService:
 
         row_queries = self._collect_row_queries(rows, column)
         points, geocoded, cached, unresolved, limit_reached = await self._resolve_points(
-            row_queries
+            row_queries, columns
         )
         return MapPointsResponse(
             table_id=table.id,
@@ -167,6 +176,7 @@ class MapService:
     async def _resolve_points(
         self,
         row_queries: list[tuple[TableRow, str]],
+        columns: list[TableColumn],
     ) -> tuple[list[MapPoint], int, int, int, bool]:
         if not row_queries:
             return [], 0, 0, 0, False
@@ -203,6 +213,16 @@ class MapService:
         )
 
         points: list[MapPoint] = []
+        company_column = _find_label_column(columns, ("company", "компан", "организац", "клиент", "account"))
+        person_column = next(
+            (
+                column for column in columns
+                if (company_column is None or column.id != company_column.id)
+                and _has_label(column, ("contact", "контакт", "фио", "full name", "person", "сотрудник", "name", "имя"))
+            ),
+            None,
+        )
+        title_column = _find_label_column(columns, ("title", "должност", "position", "позиция", "роль"))
         for row, query in row_queries:
             entry = refreshed.get(_query_hash(query))
             if entry is None:
@@ -214,11 +234,13 @@ class MapService:
                     lon=entry.lon,
                     address=query,
                     display_name=entry.display_name,
+                    company_name=_cell_text(row.data.get(str(company_column.id))) if company_column else None,
+                    person_name=_cell_text(row.data.get(str(person_column.id))) if person_column else None,
+                    person_title=_cell_text(row.data.get(str(title_column.id))) if title_column else None,
                 )
             )
         cache_hits = sum(1 for query in queries if _query_hash(query) in cached_entries)
         return points, geocoded, cache_hits, unresolved, limit_reached
-
     async def _geocode_rate_limited(self, query: str):
         async with self._rate_lock:
             delay = NOMINATIM_MIN_INTERVAL_SECONDS - (time.monotonic() - self._last_request_at)

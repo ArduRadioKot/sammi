@@ -1,6 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/forms";
 import { tablesService } from "@/services";
@@ -57,12 +56,6 @@ export default function DashboardPage() {
             <Button onClick={() => navigate("/app/tables")}>Создать таблицу</Button>
             <Button variant="secondary" onClick={() => setImportOpen(true)}>
               Import CSV
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => toast.message("AI Column появится позже")}
-            >
-              Create with AI
             </Button>
           </div>
         </div>

@@ -247,6 +247,9 @@ export interface MapPoint {
   lon: number;
   address: string;
   displayName: string | null;
+  companyName: string | null;
+  personName: string | null;
+  personTitle: string | null;
 }
 
 export interface TableMapPoints {
@@ -426,7 +429,6 @@ export type CommandActionId =
   | "create-table"
   | "import"
   | "add-enrichment"
-  | "add-ai-column"
   | "search-table"
   | "go-integrations"
   | "create-audience"

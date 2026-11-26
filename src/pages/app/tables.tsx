@@ -73,9 +73,6 @@ export default function TablesPage() {
           <Button variant="secondary" onClick={() => setImportOpen(true)}>
             Import
           </Button>
-          <Button variant="secondary" onClick={() => toast.message("Шаблоны появятся позже")}>
-            Templates
-          </Button>
         </div>
       </div>
       <div className="mt-4 flex items-center justify-between gap-3">
@@ -158,9 +155,6 @@ export default function TablesPage() {
                       }}
                     >
                       Rename
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => toast.message("Duplicate появится позже")}>
-                      Duplicate
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onSelect={async () => {

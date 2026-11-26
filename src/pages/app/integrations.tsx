@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { Badge, Input, Skeleton } from "@/components/ui/forms";
 import { integrationsService } from "@/services";
 import type { Integration } from "@/types/domain";
-import { ConnectIntegrationDialog } from "@/features/tables/components/dialogs";
 
 const CATEGORIES = ["all", "crm", "data", "ai", "communication", "automation", "storage"] as const;
 
@@ -13,7 +10,6 @@ export default function IntegrationsPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<(typeof CATEGORIES)[number]>("all");
-  const [active, setActive] = useState<Integration | null>(null);
 
   useEffect(() => {
     integrationsService.listIntegrations().then((data) => {
@@ -70,34 +66,11 @@ export default function IntegrationsPage() {
                   {item.connected ? "Connected" : "Not connected"}
                 </Badge>
               </div>
-              <Button
-                className="mt-3"
-                size="sm"
-                variant={item.connected ? "secondary" : "primary"}
-                onClick={() => setActive(item)}
-              >
-                {item.connected ? "Configure" : "Connect"}
-              </Button>
+              <p className="mt-3 text-[11px] text-ink-faint">Подключение появится после реализации серверной интеграции.</p>
             </div>
           ))}
         </div>
       )}
-      <ConnectIntegrationDialog
-        open={Boolean(active)}
-        onOpenChange={() => setActive(null)}
-        name={active?.name ?? ""}
-        onSave={async () => {
-          if (!active) return;
-          try {
-            await integrationsService.connect(active.id);
-            toast.success("Integration connected");
-            const next = await integrationsService.listIntegrations();
-            setItems(next);
-          } catch {
-            toast.message("Интеграции появятся после backend-модуля");
-          }
-        }}
-      />
     </div>
   );
 }

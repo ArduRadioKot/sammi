@@ -8,6 +8,7 @@ import { LogoMark } from "@/components/shell/logo";
 import { DocumentHead } from "@/components/seo/document-head";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/forms";
+import { Check, Copy } from "lucide-react";
 import { productShots } from "@/assets/product/shots";
 import { APP_NAME } from "@/lib/constants/config";
 import { motionTokens } from "@/lib/motion/tokens";
@@ -25,12 +26,36 @@ export function LoginPage() {
   const login = useAuthStore((s) => s.login);
   const reduce = useReducedMotion();
   const [phase, setPhase] = useState<"idle" | "loading" | "success">("idle");
+  const [copied, setCopied] = useState(false);
+  const [demoEmail] = useState(() => {
+    const key = "sammi.demo-login";
+    const existing = window.localStorage.getItem(key);
+    if (existing) return existing;
+    const generated = `demo+${window.crypto.randomUUID()}@example.com`;
+    window.localStorage.setItem(key, generated);
+    return generated;
+  });
   const from = (location.state as { from?: string } | null)?.from ?? "/app";
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { email: "" },
+    defaultValues: { email: demoEmail },
   });
+
+  const copyDemoLogin = async () => {
+    try {
+      await navigator.clipboard.writeText(demoEmail);
+    } catch {
+      const input = document.getElementById("email");
+      if (input instanceof HTMLInputElement) {
+        input.focus();
+        input.select();
+        document.execCommand("copy");
+      }
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  };
 
   const onSubmit = form.handleSubmit(async (values) => {
     setPhase("loading");
@@ -104,8 +129,14 @@ export function LoginPage() {
           <Button className="mt-6 w-full" size="lg" type="submit" disabled={phase !== "idle"}>
             {phase === "loading" ? "Входим…" : phase === "success" ? "Готово" : "Войти"}
           </Button>
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-[var(--radius-sm)] border border-line bg-surface-0 px-3 py-2 text-[12px]">
+            <span className="min-w-0 text-ink-muted">Демо-логин <span className="select-all font-medium text-ink">{demoEmail}</span></span>
+            <button type="button" onClick={() => void copyDemoLogin()} className="flex shrink-0 items-center gap-1.5 text-accent hover:opacity-80" aria-label="Скопировать демо-логин">
+              {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}{copied ? "Скопировано" : "Копировать"}
+            </button>
+          </div>
           <p className="mt-4 text-[12px] text-ink-faint">
-            Пароль не требуется. Beta passwordless: email создаёт настоящий аккаунт в PostgreSQL.
+            Демо-вход без пароля. Для отдельного рабочего аккаунта укажите свой email.
           </p>
         </motion.form>
       </main>

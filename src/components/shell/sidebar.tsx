@@ -1,7 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Activity,
-  BookOpen,
   Bot,
   Building2,
   CreditCard,
@@ -18,7 +17,6 @@ import {
 } from "lucide-react";
 import { APP_NAME, SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_WIDTH } from "@/lib/constants/config";
 import { ru } from "@/lib/i18n/ru";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { LogoMark } from "@/components/shell/logo";
 import { Button } from "@/components/ui/button";
@@ -202,17 +200,6 @@ export function AppSidebar() {
         </nav>
 
         <div className="space-y-0.5 border-t border-line px-2 py-2">
-          <button
-            type="button"
-            className={cn(
-              "flex h-8 w-full items-center gap-2 rounded-[var(--radius-sm)] px-2 text-[13px] text-ink-muted hover:bg-surface-0/70 hover:text-ink",
-              collapsed && "justify-center px-0",
-            )}
-            onClick={() => toast.message("Документация появится на следующем этапе")}
-          >
-            <BookOpen className="size-4 shrink-0" />
-            {!collapsed && ru.nav.docs}
-          </button>
           <NavLink
             href="/app/settings"
             label={ru.nav.settings}

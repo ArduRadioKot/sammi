@@ -278,14 +278,6 @@ export function ImportWizard({
                 {file.name} · {formatBytes(file.size)}
               </div>
             )}
-            <div className="grid grid-cols-2 gap-2">
-              <button type="button" disabled className="rounded-[var(--radius-md)] border border-line px-3 py-3 text-left text-[13px] text-ink-faint">
-                XLSX · Скоро
-              </button>
-              <button type="button" disabled className="rounded-[var(--radius-md)] border border-line px-3 py-3 text-left text-[13px] text-ink-faint">
-                Google Sheets · Скоро
-              </button>
-            </div>
           </div>
         )}
 
@@ -601,18 +593,6 @@ export function ExportDialog({
           <Button disabled={!tableId || downloading} onClick={() => void download()}>
             {downloading ? "Скачиваем…" : "Скачать CSV"}
           </Button>
-          <div className="grid grid-cols-2 gap-2">
-            {["XLSX", "Webhook", "CRM"].map((item) => (
-              <button
-                key={item}
-                type="button"
-                disabled
-                className="rounded-[var(--radius-md)] border border-line px-3 py-3 text-left text-[13px] text-ink-faint"
-              >
-                {item} · Скоро
-              </button>
-            ))}
-          </div>
         </div>
       </DialogContent>
     </Dialog>

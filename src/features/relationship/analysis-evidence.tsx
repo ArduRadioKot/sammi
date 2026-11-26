@@ -7,10 +7,14 @@ export const dateLabel = (value: string | null) => value
   : "—";
 const audioTime = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
-export function Sources({ citations, onSource }: { citations: Citation[]; onSource?: (id: string) => void }) {
+export function Sources({ citations, onSource, expanded = false }: {
+  citations: Citation[];
+  onSource?: (id: string) => void;
+  expanded?: boolean;
+}) {
   if (!citations.length) return null;
   return (
-    <details className="mt-2 text-xs">
+    <details className="mt-2 text-xs" open={expanded || undefined}>
       <summary className="cursor-pointer text-accent">Источники · {citations.length}</summary>
       <ul className="mt-2 space-y-2">
         {citations.map((source) => (
@@ -18,9 +22,10 @@ export function Sources({ citations, onSource }: { citations: Citation[]; onSour
             <blockquote className="wrap-break-word text-ink">{source.quote}</blockquote>
             <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-ink-muted">
               <span>{source.label}</span>
-              {source.occurred_at
-                ? <time dateTime={source.occurred_at}>{dateLabel(source.occurred_at)}</time>
-                : <time dateTime={source.collected_at}>Собрано {dateLabel(source.collected_at)}</time>}
+              {source.occurred_at && <time dateTime={source.occurred_at}>{dateLabel(source.occurred_at)}</time>}
+              {(!source.occurred_at || source.kind === "publication") && (
+                <time dateTime={source.collected_at}>Собрано {dateLabel(source.collected_at)}</time>
+              )}
               {source.match_confidence !== null && <span>Совпадение · {percentage(source.match_confidence)}</span>}
               {source.verification && (
                 <span>Подтверждено вручную · {source.verification.reviewer} · {dateLabel(source.verification.reviewed_at)}</span>

@@ -4,7 +4,7 @@ export type Point = { x: number; y: number };
 export type Size = { width: number; height: number };
 type Node = Point & { row: number; column: number; contact: StakeholderContact };
 
-export const CARD = { width: 224, height: 76 };
+export const CARD = { width: 224, height: 82 };
 const COLUMN_STEP = CARD.width + 72;
 const ROW_STEP = CARD.height + 65;
 const LEFT = 26;
