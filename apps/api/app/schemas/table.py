@@ -51,6 +51,7 @@ class TableRead(BaseModel):
     name: str
     description: str | None
     object_type: str
+    relationship_source_id: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
     row_count: int

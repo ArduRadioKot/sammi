@@ -1,0 +1,17 @@
+use_default_settings: true
+
+search:
+  formats:
+    - html
+    - json
+
+server:
+  limiter: false
+  image_proxy: false
+  public_instance: false
+
+engines:
+  - name: google
+    disabled: false
+  - name: yahoo
+    disabled: false

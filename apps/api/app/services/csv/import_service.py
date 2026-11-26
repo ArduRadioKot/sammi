@@ -4,7 +4,7 @@ import json
 import time
 import uuid
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,7 +26,7 @@ from app.services.table import (
     TableAccess,
     normalize_object_type,
     require_workspace_write,
-    require_write,
+    require_table_write,
     validate_cell_value,
     validate_column_type,
 )
@@ -148,6 +148,7 @@ class CsvImportService:
             await self._persist_rows(table, row_payloads, targets, created)
             await self.access.tables.touch(table)
             result = _result(table, plan, parsed.row_count, len(created))
+            result.analyze_relationships = options.get("analyze_relationships", False) is True
             self._log(True, request_id, user.id, workspace_id, table.id, parsed, time.perf_counter() - started)
             return result
         except AppError:
@@ -169,7 +170,7 @@ class CsvImportService:
         request_id: str | None = None,
     ) -> ImportResult:
         table, member = await self.access.table_for_user(table_id, user)
-        require_write(member)
+        require_table_write(table, member)
         started = time.perf_counter()
         parsed: ParsedCsv | None = None
         try:
@@ -484,8 +485,9 @@ def coerce_csv_value(column_type: str, raw: str | None):
 
 def _normalize_date(value: str) -> str | None:
     try:
-        date.fromisoformat(value[:10])
-        return value[:10]
+        if len(value) == 10:
+            return date.fromisoformat(value).isoformat()
+        return datetime.fromisoformat(value).isoformat()
     except ValueError:
         pass
     match = RU_DATE_RE.match(value)

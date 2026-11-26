@@ -9,9 +9,13 @@ from app.core.errors import AppError
 from app.db.session import SessionLocal, get_db
 from app.models.user import User
 from app.schemas.csv import CsvImportResponse, CsvPreviewResponse
+from app.schemas.relationship import AnalysisRequest
 from app.services.csv.export_service import CsvExportService, content_disposition, sanitize_export_filename, stream_csv
 from app.services.csv.import_service import CsvImportService
 from app.services.csv.types import normalize_delimiter
+from app.services.relationship.runs import AnalysisService
+from app.services.relationship import web_search
+from app.services.relationship.publications import PublicationError
 
 router = APIRouter(tags=["csv"])
 
@@ -70,6 +74,23 @@ async def import_workspace_csv(
         delimiter,
         request_id=_request_id(request),
     )
+    analysis_started = False
+    analysis_error = None
+    if result.analyze_relationships:
+        await session.commit()
+        try:
+            web_search.search_endpoint()
+            search = True
+        except PublicationError:
+            search = False
+        try:
+            await AnalysisService(session).start(result.table_id, user, AnalysisRequest(
+                web_search=search, fetch_csv_urls=True, refresh_hours=24 if search else None,
+            ), [])
+            analysis_started = True
+        except AppError as exc:
+            await session.rollback()
+            analysis_error = exc.message
     return CsvImportResponse(
         table_id=result.table_id,
         table_name=result.table_name,
@@ -78,6 +99,8 @@ async def import_workspace_csv(
         columns_mapped=result.columns_mapped,
         columns_skipped=result.columns_skipped,
         column_count=result.column_count,
+        analysis_started=analysis_started,
+        analysis_error=analysis_error,
     )
 
 

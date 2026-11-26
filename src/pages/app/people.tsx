@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/dialog";
 import { Badge, Input, Skeleton } from "@/components/ui/forms";
+import { ContactRecommendation, useContactAnalysisCard } from "@/features/relationship/contact-recommendation";
 import { formatNumber, initials } from "@/lib/utils";
 import { listWorkspaceContacts, type WorkspaceContact } from "@/services/people";
 import { useAuthStore } from "@/stores/auth-store";
@@ -225,6 +226,7 @@ function ContactList({ people, onSelect }: { people: WorkspaceContact[]; onSelec
 }
 
 function ContactDetails({ person }: { person: WorkspaceContact }) {
+  const analysis = useContactAnalysisCard(person.tableId, person.id);
   const fields = [
     ["Компания", person.company],
     ["Должность", person.jobTitle],
@@ -251,6 +253,7 @@ function ContactDetails({ person }: { person: WorkspaceContact }) {
           <dd className="break-words">{person.tableName}</dd>
         </div>
       </dl>
+      <div className="mt-4"><ContactRecommendation result={analysis} /></div>
       <Button asChild variant="secondary" className="mt-4">
         <Link to={`/app/tables/${person.tableId}`}>Открыть таблицу <ArrowUpRight aria-hidden="true" /></Link>
       </Button>

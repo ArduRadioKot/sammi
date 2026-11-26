@@ -11,6 +11,7 @@ const MarketingPage = lazy(() =>
 const DashboardPage = lazy(() => import("@/pages/app/dashboard"));
 const TablesPage = lazy(() => import("@/pages/app/tables"));
 const TablePage = lazy(() => import("@/pages/app/table-page"));
+const RelationshipAnalysisPage = lazy(() => import("@/features/relationship/relationship-analysis-page"));
 const PeoplePage = lazy(() => import("@/pages/app/people"));
 const CompaniesPage = lazy(() => import("@/pages/app/companies"));
 const StakeholderMapPage = lazy(() => import("@/features/stakeholders/stakeholder-map-page"));
@@ -121,6 +122,10 @@ function AppRoutes() {
                 <TablePage />
               </LazyPage>
             }
+          />
+          <Route
+            path="tables/:id/relationship-analysis"
+            element={<LazyPage><RelationshipAnalysisPage /></LazyPage>}
           />
           <Route
             path="people"

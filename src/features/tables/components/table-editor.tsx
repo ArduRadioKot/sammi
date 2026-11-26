@@ -3,6 +3,7 @@ import {
   Columns3,
   Filter,
   Group,
+  Network,
   Plus,
   Redo2,
   Search,
@@ -28,6 +29,7 @@ import { useTableEditorStore } from "@/stores/table-editor-store";
 import { useUiStore } from "@/stores/ui-store";
 import { useWorkspaceStore } from "@/stores/workspace-store";
 import { AddColumnPopover } from "@/features/tables/components/add-column-popover";
+import { AnalysisDatasetTable } from "@/features/tables/components/analysis-dataset-table";
 import { Spreadsheet } from "@/features/tables/components/spreadsheet";
 import { RowDetails, CellDetails } from "@/features/tables/components/detail-panels";
 import {
@@ -219,6 +221,8 @@ export function TableEditor({ tableId }: { tableId: string }) {
       </div>
     );
   }
+
+  if (table.relationshipSourceId) return <AnalysisDatasetTable key={table.id} table={table} />;
 
   const soon = (feature: string) => toast.message(`${feature} появится позже`);
 
@@ -438,6 +442,13 @@ export function TableEditor({ tableId }: { tableId: string }) {
           </button>
         </div>
         <div className="flex items-center gap-2">
+          {!isDemo && (
+            <Button variant="secondary" size="sm" asChild>
+              <Link to={`/app/tables/${tableId}/relationship-analysis`} aria-label="Анализ отношений">
+                <Network /><span className="hidden md:inline">Анализ отношений</span>
+              </Link>
+            </Button>
+          )}
           <Button variant="ghost" size="icon" aria-label="Undo" onClick={undo}>
             <Undo2 className="size-4" />
           </Button>
@@ -624,11 +635,14 @@ export function TableEditor({ tableId }: { tableId: string }) {
           soon("AI Research Agent");
         }}
       />
-      <RowDetails
-        open={drawer?.type === "row"}
-        onOpenChange={(open) => !open && setDrawer(null)}
-        row={rowForDrawer ?? null}
-      />
+      {drawer?.type === "row" && (
+        <RowDetails
+          open
+          onOpenChange={(open) => !open && setDrawer(null)}
+          row={rowForDrawer ?? null}
+          tableId={isDemo ? undefined : tableId}
+        />
+      )}
       <CellDetails
         open={drawer?.type === "cell"}
         onOpenChange={(open) => !open && setDrawer(null)}

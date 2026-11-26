@@ -79,3 +79,4 @@ class ImportResult:
     columns_mapped: int
     columns_skipped: int
     column_count: int
+    analyze_relationships: bool = False

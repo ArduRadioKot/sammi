@@ -27,7 +27,7 @@ type GraphProps = {
 export function StakeholderGraph({ accountName, contacts, totalContacts, edges, departments, selectedId, onSelect }: GraphProps) {
   const uid = useId();
   const [initialContactId] = useState(selectedId);
-  const { columns, nodes, size } = useMemo(() => layoutGraph(contacts, departments), [contacts, departments]);
+  const { nodes, size } = useMemo(() => layoutGraph(contacts, edges, departments), [contacts, edges, departments]);
   const paths = useMemo(() => routeEdges(edges, nodes), [edges, nodes]);
   const initialFocus = nodes.get(initialContactId) ?? nodes.values().next().value;
   const { svgRef, camera, dragging, gesture, minScale, pan, reveal, zoom, fit, pointerHandlers } = useGraphCamera(size, initialFocus);
@@ -94,12 +94,6 @@ export function StakeholderGraph({ accountName, contacts, totalContacts, edges, 
             ))}
           </defs>
           <g transform={`translate(${camera.x} ${camera.y}) scale(${camera.scale})`}>
-            {columns.map(({ name, x }) => (
-              <g key={name} aria-hidden="true">
-                <rect x={x - CARD.width / 2 - 9} y={15} width={CARD.width + 18} height={size.height - 35} rx={10} fill="var(--surface-0)" opacity={0.48} />
-                <text x={x - CARD.width / 2 + 4} y={42} className="stakeholder-department">{name}</text>
-              </g>
-            ))}
             {orderedPaths.map(({ edge, from, to, path }) => {
               const relation = RELATIONS[edge.type];
               return (
@@ -142,6 +136,7 @@ export function StakeholderGraph({ accountName, contacts, totalContacts, edges, 
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[14px] font-semibold">{contact.name}</span>
                       <span className="mt-0.5 block truncate text-[11px] text-ink-muted">{roleNames[contact.role]} · {contact.influence ? `${contact.influence}/5` : "влияние не оценено"}</span>
+                      <span className="block truncate text-[10px] text-ink-muted">{contact.department}</span>
                       {contact.stale && <span className="block truncate text-[10px] text-warning">Давно не общались</span>}
                     </span>
                     <span className="stakeholder-node-stance" data-stance={contact.stance} title={stanceNames[contact.stance]} aria-hidden="true" />

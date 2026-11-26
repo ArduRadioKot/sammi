@@ -113,7 +113,7 @@ async function readTableContacts(table: DataTable, signal: AbortSignal) {
 
 export async function listWorkspaceContacts(workspaceId: string, signal: AbortSignal) {
   const tables = (await tablesService.listTables(workspaceId, signal))
-    .filter((table) => table.type !== "companies" && table.rowCount > 0);
+    .filter((table) => !table.relationshipSourceId && table.type !== "companies" && table.rowCount > 0);
   const contacts: WorkspaceContact[] = [];
   let failedTables = 0;
 

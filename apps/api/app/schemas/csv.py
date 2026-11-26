@@ -37,4 +37,6 @@ class CsvImportResponse(BaseModel):
     columns_mapped: int
     columns_skipped: int
     column_count: int
+    analysis_started: bool = False
+    analysis_error: str | None = None
     details: dict[str, Any] | None = None

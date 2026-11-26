@@ -3,6 +3,7 @@ import type { RelationshipType, StakeholderPosition, StakeholderRole } from "./r
 export const roleNames: Record<StakeholderRole, string> = {
   decision_maker: "ЛПР",
   influencer: "Влияет на выбор",
+  actual_decider: "ЧФПР",
   initiator: "Инициатор",
   user: "Пользователь",
   technical_expert: "Технический эксперт",

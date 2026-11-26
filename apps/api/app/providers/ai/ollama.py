@@ -112,6 +112,8 @@ class OllamaProvider(ProviderMixin):
         prompt: str | None = None,
         temperature: float | None = None,
         system: str | None = None,
+        think: bool | None = None,
+        num_predict: int | None = None,
     ) -> AIGenerationResult:
         result = await self._chat(
             model=model,
@@ -120,6 +122,8 @@ class OllamaProvider(ProviderMixin):
             temperature=temperature,
             system=system,
             response_format=json_schema,
+            think=think,
+            num_predict=num_predict,
         )
         try:
             parsed = json.loads(result.content)
@@ -148,6 +152,8 @@ class OllamaProvider(ProviderMixin):
         temperature: float | None,
         system: str | None,
         response_format: dict[str, Any] | None = None,
+        think: bool | None = None,
+        num_predict: int | None = None,
     ) -> AIGenerationResult:
         chosen = self._resolve_model(model)
         body: dict[str, Any] = {
@@ -155,8 +161,15 @@ class OllamaProvider(ProviderMixin):
             "messages": _build_messages(prompt=prompt, messages=messages, system=system),
             "stream": False,
         }
+        options: dict[str, Any] = {}
         if temperature is not None:
-            body["options"] = {"temperature": temperature}
+            options["temperature"] = temperature
+        if num_predict is not None:
+            options["num_predict"] = num_predict
+        if options:
+            body["options"] = options
+        if think is not None:
+            body["think"] = think
         if response_format is not None:
             body["format"] = response_format
         started = time.perf_counter()

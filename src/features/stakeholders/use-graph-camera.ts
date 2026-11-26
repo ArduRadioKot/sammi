@@ -51,7 +51,7 @@ export function useGraphCamera(content: Size, initialFocus?: Point) {
     (size.height - FIT_PADDING * 2) / content.height,
   ));
   const minScale = Math.min(0.2, fitScale);
-  const focus = !fitted && size.width < 520 ? initialFocus : undefined;
+  const focus = !fitted && (size.width < 520 || fitScale < 0.65) ? initialFocus : undefined;
   const initialScale = focus ? Math.max(fitScale, 0.78) : fitScale;
   const initialX = focus ? size.width / 2 - focus.x * initialScale : (size.width - content.width * fitScale) / 2;
   const initialY = focus ? size.height * 0.32 - focus.y * initialScale : (size.height - content.height * fitScale) / 2;

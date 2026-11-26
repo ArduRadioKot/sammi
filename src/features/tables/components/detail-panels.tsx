@@ -1,7 +1,9 @@
 import { formatDistanceToNow } from "date-fns";
 import { ru as ruLocale } from "date-fns/locale";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Sheet } from "@/components/ui/dialog";
+import { ContactRecommendation, useContactAnalysisCard } from "@/features/relationship/contact-recommendation";
 import { hashHue, initials } from "@/lib/utils";
 import { enrichmentService, type CellProvenance } from "@/services/enrichment";
 import type { TableRow } from "@/types/domain";
@@ -14,28 +16,38 @@ export function RowDetails({
   open,
   onOpenChange,
   row,
+  tableId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   row: TableRow | null;
+  tableId?: string;
 }) {
+  const result = useContactAnalysisCard(tableId, open ? row?.id : undefined);
   if (!row) return null;
-  const name = String(val(row, "company") ?? "");
+  const contact = result?.card;
+  const name = contact?.contact.name ?? String(val(row, "company") ?? "");
   const hue = hashHue(name);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} title="Company Details" width={440}>
-      <div className="flex items-center gap-3">
-        <span
-          className="flex size-10 items-center justify-center rounded-[var(--radius-md)] text-[13px] font-medium"
-          style={{ background: `hsl(${hue} 18% 88%)`, color: `hsl(${hue} 22% 28%)` }}
-        >
-          {initials(name)}
-        </span>
-        <div>
-          <div className="text-[16px] font-medium">{name || "Строка"}</div>
-          <div className="text-[12px] text-ink-muted">{row.id}</div>
+    <Sheet open={open} onOpenChange={onOpenChange} title={tableId ? "Карточка контакта" : "Company Details"} width={440}>
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <span
+            className="flex size-10 items-center justify-center rounded-[var(--radius-md)] text-[13px] font-medium"
+            style={{ background: `hsl(${hue} 18% 88%)`, color: `hsl(${hue} 22% 28%)` }}
+          >
+            {initials(name)}
+          </span>
+          <div>
+            <div className="text-[16px] font-medium">{name || "Строка"}</div>
+            <div className="text-[12px] text-ink-muted">
+              {[contact?.contact.title, contact?.contact.department].filter(Boolean).join(" · ") || row.id}
+            </div>
+          </div>
         </div>
+        {tableId && <ContactRecommendation result={result} />}
+        {tableId && <Link className="text-sm text-accent underline" to={`/app/tables/${tableId}/relationship-analysis`}>Открыть анализ отношений</Link>}
       </div>
     </Sheet>
   );

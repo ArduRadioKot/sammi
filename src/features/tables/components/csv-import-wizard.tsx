@@ -96,6 +96,7 @@ export function ImportWizard({
   const [result, setResult] = useState<CsvImportResult | null>(null);
   const [errors, setErrors] = useState<CsvValidationErrorItem[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [analysisChoice, setAnalysisChoice] = useState<boolean | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const columnsForMap = preview?.existing_columns?.map((column) => ({
@@ -110,6 +111,11 @@ export function ImportWizard({
     const skipped = mapping.filter((item) => item.action === "skip").length;
     return { created, mapped, skipped };
   }, [mapping]);
+  const names = new Set(mapping.filter((item) => item.action === "create")
+    .map((item) => item.name.toLowerCase().replace(/[^a-zа-я0-9]/g, "")));
+  const hasName = ["fullname", "contactname", "фио", "контакт"].some((alias) => names.has(alias));
+  const hasCompany = ["company", "companyname", "account", "компания", "клиент"].some((alias) => names.has(alias));
+  const analyzeAfterImport = analysisChoice ?? (objectType === "person" || (hasName && hasCompany));
 
   const loadPreview = async (nextFile: File, nextDelimiter: string) => {
     if (!workspaceId && mode === "workspace") {
@@ -173,6 +179,7 @@ export function ImportWizard({
         delimiter,
         table_name: tableName.trim() || preview.suggested_table_name,
         object_type: objectType,
+        analyze_relationships: mode === "workspace" && analyzeAfterImport,
       };
       const imported =
         mode === "table" && tableId
@@ -214,6 +221,7 @@ export function ImportWizard({
           setResult(null);
           setErrors([]);
           setErrorMessage(null);
+          setAnalysisChoice(null);
         }
         onOpenChange(next);
       }}
@@ -459,6 +467,15 @@ export function ImportWizard({
             <div>Existing mappings: {summary.mapped}</div>
             <div>Skipped: {summary.skipped}</div>
             <div className="text-[12px] text-ink-muted">Импорт добавит новые строки. Дедупликации нет.</div>
+            {mode === "workspace" && (
+              <label className="flex items-start gap-2">
+                <input type="checkbox" className="mt-0.5 accent-accent" checked={analyzeAfterImport}
+                  onChange={(event) => setAnalysisChoice(event.target.checked)} />
+                <span>Запустить анализ и автоматически искать публикации после импорта
+                  <span className="block text-xs text-ink-muted">При подключённом SearXNG в поиск передаются ФИО и компания. Sammi повторяет поиск раз в сутки.</span>
+                </span>
+              </label>
+            )}
             {errors.length > 0 && (
               <div className="max-h-40 overflow-auto rounded-[var(--radius-sm)] border border-line p-2">
                 {errors.map((item) => (
@@ -476,14 +493,19 @@ export function ImportWizard({
             <div>
               Импортировано: {formatNumber(result.rows_imported)} строк · {result.column_count} колонок.
             </div>
+            {result.analysis_started && <p role="status" className="text-xs text-ink-muted">Анализ поставлен в очередь.</p>}
+            {result.analysis_error && <p role="status" className="text-xs text-warning">{result.analysis_error}</p>}
             <Button
               onClick={() => {
                 onOpenChange(false);
                 onImported?.(result.table_id);
-                if (mode === "workspace") navigate(`/app/tables/${result.table_id}`);
+                if (mode === "workspace") {
+                  const destination = `/app/tables/${result.table_id}`;
+                  navigate(analyzeAfterImport ? `${destination}/relationship-analysis` : destination);
+                }
               }}
             >
-              Открыть таблицу
+              {mode === "workspace" && analyzeAfterImport ? "Открыть анализ" : "Открыть таблицу"}
             </Button>
           </div>
         )}

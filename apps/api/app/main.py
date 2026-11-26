@@ -1,3 +1,6 @@
+import asyncio
+from contextlib import asynccontextmanager, suppress
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -6,11 +9,26 @@ from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
 from app.middleware.request_context import RequestContextMiddleware
+from app.services.relationship.runs import run_worker
 
 settings = get_settings()
 configure_logging(settings.log_level)
 
-app = FastAPI(title=settings.app_name, version="0.1.0")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    if not settings.relationship_ai_enabled or settings.app_env == "test":
+        yield
+        return
+    worker = asyncio.create_task(run_worker())
+    try:
+        yield
+    finally:
+        worker.cancel()
+        with suppress(asyncio.CancelledError):
+            await worker
+
+
+app = FastAPI(title=settings.app_name, version="0.1.0", lifespan=lifespan)
 register_exception_handlers(app)
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(

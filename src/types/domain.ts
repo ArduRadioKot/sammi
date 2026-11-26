@@ -226,6 +226,7 @@ export interface ColumnDefinition {
   hidden?: boolean;
   frozen?: boolean;
   config?: ColumnConfig;
+  analysisOutput?: boolean;
 }
 
 export interface TableView {
@@ -267,6 +268,7 @@ export interface DataTable {
   name: string;
   type: TableType;
   description?: string;
+  relationshipSourceId?: string;
   columns: ColumnDefinition[];
   views: TableView[];
   defaultViewId: string;

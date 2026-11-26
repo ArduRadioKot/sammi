@@ -1,61 +1,61 @@
 # FastAPI backend
 
-Step 6: FastAPI, async SQLAlchemy, PostgreSQL, Alembic, passwordless JWT auth, workspaces, tables/columns/rows, CSV import/export, credit ledger, Ollama generation, DaData enrichment.
+FastAPI, async SQLAlchemy, PostgreSQL и Alembic. API обслуживает авторизацию, рабочие пространства, таблицы, CSV, журнал credits, DaData, географическую карту и локальный анализ отношений.
 
-Real endpoints: health, auth, workspaces, tables, columns, rows, CSV preview/import/export, credits balance/history, AI provider status/models, Ollama test generation, enrichment providers/columns/runs/attempts/provenance. AI Column is not implemented.
+Инструкции по запуску, полный список маршрутов, таблицы из презентации и операционные настройки находятся в [корневом README](../../README.md).
 
-Passwordless email login is a development/beta mechanism, not production auth.
+## Локальный анализ отношений
 
-## Test database
+Импортируйте CSV контактов в таблицу одного клиента. Мастер импорта автоматически включает анализ для таблицы типа «Люди» или CSV со столбцами ФИО и компании. При включённом анализе FastAPI ставит задачу в очередь после сохранения CSV, загружает ссылки из исходной таблицы и запускает веб-поиск с ежедневным обновлением, если настроен SearXNG. Поиск можно отключить при настройке анализа, а интервал изменить в отчёте. Базовый отчёт появляется после подготовки. Фоновая обработка дополняет его темами, технологиями, сигналами и следующим шагом. Ассистент использует тот же корпус для вопросов, брифа и поиска пути между контактами.
 
-Pytest must use `sammi_test`, never development `sammi`. There is no fallback from `TEST_DATABASE_URL` to `DATABASE_URL`.
+В FastAPI выполните `pip install -r requirements.txt` и `alembic upgrade head`. Для Ollama на той же машине используйте `OLLAMA_BASE_URL=http://localhost:11434`. Если API запущен в Docker Desktop, используйте `http://host.docker.internal:11434`. Распознавание, анализ и чат используют установленную `gemma4:e2b-mlx`. Для аудио понадобится FFmpeg и Ollama с поддержкой `/v1/audio/transcriptions`. Образ FastAPI содержит FFmpeg. Флаг `RELATIONSHIP_AI_ENABLED=false` отключает новые запуски, фоновые задания и чат.
 
-Native PostgreSQL:
+| Что загрузить | Столбцы |
+| --- | --- |
+| Карточка контакта | `full_name` (обязательный), `contact_id`, `company`, `title`, `department` |
+| Полномочия | `decision_role` (ЛПР, ЛВР, ЧФПР), `decision_authority` (да/нет), `manager_influence` (0–1) |
+| История | `interaction`, `occurred_at` (ГГГГ-ММ-ДД или ДД.ММ.ГГГГ), `feedback`, `interaction_type`, `employee_name`, `project_name` |
+| Связи | `target_contact_id` (ID или ФИО), `relationship_type` (подчинение, влияние, совместный проект, знакомство или область влияния) |
+| Публичные события | `public_text`, `source_url`, `event_date` |
+| Оценки CRM | `loyalty_assessment` для контакта, `account_loyalty` для клиента |
 
-```bash
-psql -h localhost -d postgres -c "CREATE DATABASE sammi_test OWNER sammi;"
-```
+ФИО повторяется в каждой строке истории. Используйте стабильный ID, чтобы отличать тёзок. Для таблицы с нестандартными заголовками выберите столбцы вручную. Лимит запуска составляет 40 контактов и 1000 строк. Можно приложить до восьми файлов по 5 МБ. Поддерживаются PDF с текстовым слоем, PPTX, HTML, TXT, MD, SRT, VTT и до трёх записей WAV, MP3, M4A, OGG, FLAC или AAC длительностью до двух минут. Запись с явно указанным контактом входит в историю взаимодействий. Расшифровка публичного выступления проходит поиск совпадения.
 
-`.env`:
+### Шесть этапов реализации
 
-```bash
-DATABASE_URL=postgresql+asyncpg://sammi:change-me@localhost:5432/sammi
-TEST_DATABASE_URL=postgresql+asyncpg://sammi:change-me@localhost:5432/sammi_test
-```
+1. FastAPI создаёт снимок таблицы и материалов, извлекает текст из HTML, PDF и PPTX и разбивает его на фрагменты. Gemma 4 расшифровывает аудио локально. Цитаты из записей сохраняют временной диапазон.
+2. Русская лемматизация, словарь синонимов, BM25 и латентный семантический анализ отбирают релевантные фрагменты. Векторы вычисляются из корпуса средствами NumPy. Сопоставление использует ФИО, компанию, должность и дату.
+3. Правила считают влияние по пяти сигналам, определяют роли, покрытие, динамику и риски по датированным касаниям. Отчёт показывает оценку лояльности из CRM и охват подразделений. Пороги задаются переменными `RELATIONSHIP_*_THRESHOLD` и `RELATIONSHIP_STALE_ALERT_MIN_TOUCHES`.
+4. Gemma 4 через Ollama извлекает людей, организации, должности, темы, технологии, позиции, итоги и сигналы обратной связи по JSON-схеме. Сервер проверяет цитаты по тексту источника и сохраняет прогресс в PostgreSQL. При временном сбое обработку можно повторить.
+5. Ассистент отвечает по найденным фрагментам, объясняет метрики, готовит бриф и черновик письма. Путь строится по зафиксированным связям. Связи, извлечённые из текста, попадают в граф после подтверждения редактором. Пункты без проверяемой цитаты помечаются как неподтверждённые.
+6. FastAPI загружает публичные материалы по HTTPS, ищет новые публикации в заданных RSS или Atom и может выполнить веб-поиск по ФИО и компании через SearXNG. Поиск и проверка лент повторяются ежедневно или еженедельно. Найденные публикации проходят проверку совпадения по полному тексту.
 
-```bash
-cd apps/api
-DATABASE_URL=postgresql+asyncpg://sammi:change-me@localhost:5432/sammi_test alembic upgrade head
-TEST_DATABASE_URL=postgresql+asyncpg://sammi:change-me@localhost:5432/sammi_test pytest
-```
+Вставьте до восьми ссылок в форму, до четырёх ссылок на ленты или включите загрузку из столбца `source_url` для строк без `public_text`. За один проход загружается до 40 уникальных публикаций. Базовый отчёт доступен во время загрузки. На фоновую обработку отводится шесть минут. Расписание привязано к актуальному снимку таблицы и приостанавливается при её изменении до нового запуска. Интервал можно выключить в отчёте.
 
-Destructive fixtures abort unless `APP_ENV=test` and the database name is `sammi_test` or ends with `_test`.
+В разделе **Проверка источников** можно прочитать сохранённый текст неоднозначной публикации. Редактор может выбрать контакт или отклонить источник и оставить комментарий. Подтверждение обновляет отчёт и запускает пересчёт на локальной Gemma 4. Цитаты отмечают ручную проверку. Отчёт запуска хранит решение, имя проверившего и время. Для ручной проверки нужен отчёт, созданный с сохранением текста источников.
 
-If Docker is available:
+### Веб-поиск
 
-```bash
-docker compose exec db psql -U sammi -d postgres -c "CREATE DATABASE sammi_test OWNER sammi;"
-docker compose exec api alembic upgrade head
-```
+Для FastAPI в Docker укажите `RELATIONSHIP_SEARCH_BASE_URL=http://searxng:8080` и задайте случайный `SEARXNG_SECRET` в `.env`. Запустите профиль `docker compose --profile search up -d searxng api`. Для FastAPI на хосте адрес встроенного контейнера — `http://127.0.0.1:8888`. Поддерживается и отдельный SearXNG с включённым форматом JSON. В форме анализа включите **Искать публикации в интернете по ФИО и компании**. Запрос содержит ФИО и компанию, а документы и переписка обрабатываются в локальном Ollama. Отчёт показывает, сколько контактов проверено и сколько ссылок передано на загрузку.
 
-Host pytest cannot resolve Compose hostname `db`; `TEST_DATABASE_URL` with `@db:` is rewritten to `localhost`.
+### Результаты в таблице и карточке
 
-Optional live DaData tests (not in default pytest):
+После фоновой обработки на странице анализа появятся ссылки на пять таблиц из презентации. В них 61 поле с исходными именами. Строка контакта одна на ID, касания, подтверждённые публикации и связи показаны отдельными записями. Для всех таблиц доступен CSV. PostgreSQL хранит эти таблицы как производные от исходной таблицы клиента. Они обновляются после следующего анализа. Значения без подтверждённых данных остаются пустыми. Для структуры требуется миграция `0009_relationship_datasets`.
 
-```bash
-DADATA_INTEGRATION_TEST=true DADATA_API_KEY=... pytest -m dadata
-```
+Карта решений располагает руководителей над подчинёнными по подтверждённым связям, включая `reports_to_id` из CSV. Для контактов без связей карта использует роли из анализа.
 
-Optional live Ollama tests:
+Кнопка **Сохранить столбцы в таблицу** переносит готовый отчёт в 13 обычных столбцов PostgreSQL. Повторная публикация обновляет те же столбцы. Если имя занято исходным столбцом, результаты сохраняются в отдельном столбце с суффиксом **· анализ**. Для строк одного и того же контакта значения берутся из его карточки по ID.
 
-```bash
-OLLAMA_INTEGRATION_TEST=true pytest -m ollama
-```
+| Столбцы | Содержание |
+| --- | --- |
+| `decision_role`, `influence_level`, `influence_scope` | Роль, влияние от 0 до 1 и подтверждённые связи с указанием направления |
+| `relationship_trend`, `last_touch_at`, `touches_90d` | Динамика, последнее касание и число касаний за 90 дней |
+| `coverage_score`, `account_risks` | Доля подтверждённых ключевых ролей со свежим касанием и риски клиента |
+| `professional_topics`, `next_action` | Профессиональные темы и следующий шаг по контакту |
+| `next_action_sources`, `next_action_author`, `analysis_updated_at` | Цитаты и ссылки, автор рекомендации и дата расчёта |
 
-```bash
-cd apps/api
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-TEST_DATABASE_URL=postgresql+asyncpg://sammi:change-me@localhost:5432/sammi_test pytest
-```
+Рекомендация доступна в карточке раздела **Люди** и по значку в первой колонке редактора таблицы. Она подписана именем контакта, автором и датой расчёта. Под ней можно раскрыть источники.
+
+## Тестовая база
+
+Используйте pytest только с базой `sammi_test`. Команды создания базы, проверка имени перед миграцией и запуск опциональных проверок DaData и Ollama приведены в разделе [Тестирование и сборка](../../README.md#тестирование-и-сборка). При PostgreSQL из Compose запускайте pytest с хоста через опубликованный порт базы.

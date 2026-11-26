@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str = ""
     ollama_timeout_seconds: float = Field(default=60, gt=0)
+    relationship_ai_enabled: bool = True
+    relationship_search_base_url: str = ""
+    relationship_identity_threshold: float = Field(default=0.78, ge=0.65, le=1)
+    relationship_decision_threshold: float = Field(default=0.7, ge=0, le=1)
+    relationship_influence_threshold: float = Field(default=0.5, ge=0, le=1)
+    relationship_confirmation_threshold: float = Field(default=0.6, ge=0, le=1)
+    relationship_stale_alert_min_touches: int = Field(default=3, ge=1, le=90)
 
     yandex_ai_api_key: str = ""
     yandex_ai_project_id: str = ""

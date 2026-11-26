@@ -44,6 +44,7 @@ export type CsvImportOptions = {
   delimiter?: CsvDelimiter | string;
   table_name?: string;
   object_type?: "company" | "person" | "custom";
+  analyze_relationships?: boolean;
 };
 
 export type CsvImportResult = {
@@ -54,6 +55,8 @@ export type CsvImportResult = {
   columns_mapped: number;
   columns_skipped: number;
   column_count: number;
+  analysis_started: boolean;
+  analysis_error: string | null;
 };
 
 export type CsvValidationErrorItem = {

@@ -1,366 +1,864 @@
-# Платформа
+# Sammi
+
+Sammi — B2B-рабочее пространство для работы с компаниями, контактами и данными CRM. Основной интерфейс — редактор таблиц. В нём можно импортировать CSV, редактировать записи, обогащать данные компании по ИНН или ОГРН и экспортировать таблицу. Для работы с конкретным клиентом Sammi строит вертикальную карту отношений, собирает публичные материалы и предлагает следующий шаг по каждому контакту.
+
+Анализ отношений использует локальную модель `gemma4:e2b-mlx` через Ollama. FastAPI загружает веб-источники и сопоставляет их с контактами. PostgreSQL хранит исходные таблицы, результаты анализа, цитаты, историю событий и журнал credits. После обработки доступны пять таблиц из презентации кейса КРОК со всеми 61 полем.
+
+## Содержание
+
+- [Возможности проекта](#возможности-проекта)
+- [Быстрый запуск](#быстрый-запуск)
+- [Подключение Ollama и веб-поиска](#подключение-ollama-и-веб-поиска)
+- [Работа с данными](#работа-с-данными)
+- [Анализ отношений](#анализ-отношений)
+- [Таблицы из презентации](#таблицы-из-презентации)
+- [Архитектура и хранение](#архитектура-и-хранение)
+- [Доступ, интеграции и credits](#доступ-интеграции-и-credits)
+- [Маршруты и API](#маршруты-и-api)
+- [Параметры окружения](#параметры-окружения)
+- [Тестирование и сборка](#тестирование-и-сборка)
+- [Развёртывание и диагностика](#развёртывание-и-диагностика)
+- [Структура репозитория](#структура-репозитория)
+
+## Возможности проекта
+
+| Раздел | Что доступно |
+| --- | --- |
+| Рабочее пространство | Вход по email в бета-режиме, JWT, получение текущего пользователя и принадлежащих ему рабочих пространств |
+| Таблицы | Создание таблиц, столбцов и строк, изменение значений, удаление и экспорт. Данные хранятся в PostgreSQL |
+| CSV | Предпросмотр, выбор разделителя, сопоставление столбцов, создание таблицы или добавление строк в существующую |
+| Люди | Каталог контактов из таблиц пространства, поиск, карточка контакта и рекомендация по последнему анализу |
+| Анализ отношений | Базовый отчёт, вертикальная карта, роли, показатели касаний, риски, публичные события, ручная проверка источников и ассистент |
+| Веб-поиск | Поиск профессиональных публикаций по ФИО и компании через SearXNG, загрузка HTTPS-страниц, обработка RSS и Atom, повторный поиск по расписанию |
+| Географическая карта | Точки из адресного столбца таблицы, геокодирование через Nominatim и кэш координат в PostgreSQL |
+| Обогащение | DaData по ИНН или ОГРН, запись результата и происхождения значения, история обработки |
+| Usage и провайдеры | Баланс и журнал credits, проверка доступности AI-провайдеров, список моделей Ollama и пробная генерация |
+| Демонстрационные экраны | Вымышленные клиенты для демонстрации карты ЛПР, а также интерфейсы аудиторий, сигналов, агентов, кампаний и интеграций |
 
-Российский B2B GTM / enrichment / revenue intelligence SaaS. Spreadsheet-first workspace: компании, люди, waterfall, AI-research, сигналы и активация.
+По умолчанию `VITE_ENABLE_DEMO_DATA=false`, поэтому новый workspace начинается с пустых таблиц. Раздел «Компании» отдельно показывает вымышленных клиентов кейса КРОК. Эта демонстрация работает с `localStorage` под ключом `sammi.stakeholders.demo.v1`. Рабочая карта клиента доступна внутри анализа исходной таблицы.
 
-## Product
+Формулы, универсальные AI-столбцы, Waterfall, синхронизация с внешней CRM, биллинг, XLSX и Google Sheets находятся за пределами текущего рабочего контура. Автоматические сигналы в отчёте отношений рассчитываются по источникам клиента. Отдельный экран «Сигналы» остаётся демонстрационной поверхностью продукта.
 
-Пользователь ведёт рынок в таблицах. Главный экран — Table Editor. Продукт ощущается как GTM Intelligence Operating System: landing рассказывает путь от сырых данных к действию, приложение остаётся плотным рабочим инструментом.
+## Быстрый запуск
 
-## Frontend architecture
+### Что понадобится
 
-React 19 + TypeScript + Vite + React Router. Next.js runtime удалён. Mock services в `src/services/` — будущая точка замены на FastAPI clients. Компоненты не знают transport.
+| Компонент | Версия или условие |
+| --- | --- |
+| Node.js и npm | Node.js 22.12+ для локальной сборки. В Docker используется Node.js 22 |
+| Python | 3.12 в Docker и в конфигурации Render. Для локального API используйте Python 3.12 или совместимую версию |
+| PostgreSQL | 16 в Docker Compose. Базы `sammi` для разработки и `sammi_test` для pytest |
+| Docker Compose | Для запуска всех сервисов или только PostgreSQL и SearXNG |
+| Ollama | Для локального анализа и ассистента. В списке моделей должна быть `gemma4:e2b-mlx` |
+| FFmpeg | Для аудио. Установлен в образе FastAPI. При запуске API на хосте должен быть доступен в `PATH` |
+| DaData и SearXNG | Опциональны для базовой работы с таблицами. DaData нужен для обогащения по реквизитам, SearXNG — для веб-поиска |
 
-## React/Vite migration
+### Весь стек через Docker Compose
 
-App Router, `next/link`, `next/image`, Server Components и `NEXT_PUBLIC_*` заменены на Vite + React Router. Переменные: `VITE_API_URL`, `VITE_ENABLE_DEMO_DATA`.
+1. В корне проекта подготовьте файл окружения.
 
-## Routes
+   ```bash
+   test -f .env || cp .env.example .env
+   openssl rand -hex 32
+   ```
 
-```text
-/                      landing
-/product /solutions /integrations /security /pricing /docs
-/login                 passwordless email → FastAPI JWT (beta)
-/app
-/app/tables
-/app/tables/:id
-/app/people /companies /audiences /signals /agents
-/app/campaigns /integrations /usage /settings
-```
+   Установите сгенерированное значение в `SECRET_KEY` и задайте пароль `POSTGRES_PASSWORD`. Для Ollama на хосте Docker Desktop установите `OLLAMA_BASE_URL=http://host.docker.internal:11434`. В контейнере адрес `localhost` указывает на сам контейнер. В Linux укажите адрес приватного хоста Ollama, доступный контейнеру.
 
-Демо-роут `/app/tables/demo-russian-saas` не входит в normal flow. Без `VITE_ENABLE_DEMO_DATA=true` показывает «Demo data disabled».
+2. Запустите сервисы и примените миграции.
 
-## Auth Development Flow
+   ```bash
+   docker compose up -d --build
+   docker compose exec api alembic upgrade head
+   docker compose ps
+   curl -fsS http://localhost:8000/api/v1/health
+   ```
 
-`/login` принимает только email. Это **beta passwordless**, не production auth: пароля, magic-link и OAuth нет.
+3. Откройте [приложение](http://localhost:3000) и войдите под тестовым email. Выберите «Мои таблицы» → «Import CSV» или создайте пустую таблицу.
 
-1. `POST /api/v1/auth/login` `{ "email": "..." }`
-2. FastAPI нормализует email, находит или создаёт `users`
-3. Для нового пользователя в одной транзакции создаются `workspaces` («Мой workspace») и `workspace_members` (role `owner`)
-4. Ответ: JWT + user
-5. Frontend кладёт JWT в `localStorage` (`sammi.access_token`) — временное решение для SPA
-6. `GET /api/v1/auth/me` и `GET /api/v1/workspaces`
-7. Redirect `/app`
+| Сервис | Адрес с хоста |
+| --- | --- |
+| Vite | `http://localhost:3000` |
+| FastAPI | `http://localhost:8000` |
+| Swagger UI | `http://localhost:8000/docs` |
+| OpenAPI | `http://localhost:8000/openapi.json` |
+| Проверка API и базы | `http://localhost:8000/api/v1/health` |
+| PostgreSQL | `localhost:5432` |
+| SearXNG при включённом профиле `search` | `http://127.0.0.1:8888` |
 
-Reload страницы снова вызывает `/auth/me`. Невалидный token → `/login`. Выйти вызывает `POST /api/v1/auth/logout` и удаляет token локально (JWT stateless).
+Compose подставляет URL базы для API из `POSTGRES_USER`, `POSTGRES_PASSWORD` и `POSTGRES_DB`. В сети Compose база доступна по имени `db`. Первый запуск PostgreSQL создаёт базу и пользователя из этих настроек. При существующем томе используйте фактический пароль базы или измените его средствами PostgreSQL.
 
-Повторный login с тем же email не создаёт второго user/workspace.
+### FastAPI и Vite на хосте
 
-## AI Providers
+Этот вариант подходит для уже запущенного PostgreSQL и Ollama. При необходимости поднимите только PostgreSQL командой `docker compose up -d db`. Для нативного PostgreSQL заранее создайте роль и базу `sammi` с правами на схему.
 
-Backend registry: Ollama (local default), Yandex AI Studio, GigaChat.
+1. Подготовьте корневой `.env` из `.env.example`, если файла ещё нет. В `apps/api/.env` задайте параметры для процесса на хосте. Файл в `apps/api` подхватывается при запуске из этого каталога и переопределяет совпадающие значения корневого файла.
 
-Secrets только в backend env. Frontend: Settings → AI Providers показывает Configured / Available, capabilities и (для Ollama) установленные модели. React не ходит в Ollama напрямую.
+   ```dotenv
+   APP_ENV=development
+   DATABASE_URL=postgresql+asyncpg://sammi:change-me@localhost:5432/sammi
+   SECRET_KEY=change-me-local
+   CORS_ORIGINS=http://localhost:3000
+   FRONTEND_URL=http://localhost:3000
+   OLLAMA_BASE_URL=http://127.0.0.1:11434
+   ```
 
-- Ollama: `OLLAMA_BASE_URL`, `OLLAMA_MODEL`, `OLLAMA_TIMEOUT_SECONDS`
-- Yandex: `YANDEX_AI_API_KEY`, `YANDEX_AI_PROJECT_ID`, `YANDEX_AI_BASE_URL`
-- GigaChat: `GIGACHAT_AUTH_KEY`, `GIGACHAT_SCOPE`, `GIGACHAT_BASE_URL`, `GIGACHAT_AUTH_URL`
+   Замените `change-me` на пароль своей локальной базы и укажите сгенерированный `SECRET_KEY`.
 
-Если ключ пустой, приложение стартует, provider `configured=false`. Если Ollama не запущен, FastAPI остаётся healthy, provider `available=false`. Нет автоматического fallback на Yandex/GigaChat.
+2. В первом терминале запустите API.
 
-Yandex и GigaChat на Step 5: health / OAuth only. Generation — 501.
+   ```bash
+   cd apps/api
+   python3.12 -m venv .venv
+   source .venv/bin/activate
+   python -m pip install -r requirements.txt
+   python -m alembic upgrade head
+   python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+   ```
 
-AI Column ещё не подключён к Table Editor.
+3. Во втором терминале из корня проекта запустите интерфейс.
 
-## Credits
+   ```bash
+   npm ci
+   npm run dev
+   ```
 
-Настоящий ledger, не `workspace.credits`. Один workspace = один `credit_accounts`. Операции пишутся в append-only `credit_transactions`.
+   Установите `VITE_API_URL=http://localhost:8000` в корневом `.env`. Браузер использует этот адрес без суффикса `/api/v1`. После изменения `VITE_*` перезапустите Vite или пересоберите статический интерфейс.
 
-```text
-Workspace
-  → CreditAccount (available, reserved)
-    → CreditTransaction (grant / reserve / charge / release / refund / adjustment)
-```
+## Подключение Ollama и веб-поиска
 
-Семантика: GRANT увеличивает available; RESERVE переносит available → reserved; CHARGE списывает reserved; RELEASE возвращает reserved → available; REFUND увеличивает available.
+### Ollama
 
-Инварианты: `available >= 0`, `reserved >= 0`. RESERVE не больше available, CHARGE/RELEASE не больше reserved. Мутации идут в транзакции с `SELECT … FOR UPDATE` по account row.
-
-Первый `GET /credits` создаёт account и одно ledger-событие `grant` на `CREDITS_INITIAL_GRANT` (по умолчанию 1000). Повторный GET не создаёт второй grant. Existing workspaces получают account lazy, без зашитого grant в миграции.
-
-Публичные POST grant/charge/refund нет. Development-only: `POST /api/v1/dev/workspaces/{id}/credits/grant` регистрируется только при `APP_ENV=development`.
-
-Ollama test generation credits не списывает.
-
-## Ollama
-
-Локальный native API: `GET /api/tags`, `POST /api/chat` (`stream=false`). Auth не нужен. Модель не скачивается автоматически.
-
-Два режима:
-
-- FastAPI на хосте: `OLLAMA_BASE_URL=http://localhost:11434`
-- FastAPI в Docker на macOS, Ollama на хосте: `OLLAMA_BASE_URL=http://host.docker.internal:11434`
-
-Установка и pull моделей — операционная задача, см. [Ollama docs](https://docs.ollama.com). Compose-сервис Ollama не добавляется.
-
-Проверка: Settings → AI Providers → Ollama → Test generation. Промпт серверный (`Ответь одним словом: OK`). Structured output (`format` = JSON Schema) есть в provider, в UI не выведен.
-
-## FastAPI
-
-`apps/api/` — FastAPI, async SQLAlchemy, PostgreSQL, Alembic.
-
-Реальные endpoints: health, auth, workspaces, tables/columns/rows, CSV import/export, credits balance/history, AI provider status/models, Ollama test generation, enrichment providers/columns/runs/provenance, карта контактов (`Nominatim` + кэш в Postgres). AI Column API нет.
-
-## Tables Architecture
-
-Первая продуктовая сущность: **table внутри workspace**.
-
-```text
-User (JWT)
-  → Workspace membership
-    → Table
-      → Columns (metadata)
-      → Rows (одна PostgreSQL-запись, cell values в JSONB)
-```
-
-- `tables` — имя, `object_type` (`company` | `person` | `custom`), `workspace_id`, `created_by`
-- `table_columns` — имя, type, position, `config` JSONB
-- `table_rows` — `position`, `data` JSONB с ключами = UUID колонок
-
-Нет отдельной SQL-таблицы на каждую пользовательскую spreadsheet и нет `table_cells`. Rename колонки не ломает данные.
-
-## Tables API
-
-```text
-GET/POST  /api/v1/workspaces/{workspace_id}/tables
-GET/PATCH/DELETE  /api/v1/tables/{table_id}
-GET/POST  /api/v1/tables/{table_id}/columns
-PATCH/DELETE  /api/v1/tables/{table_id}/columns/{column_id}
-POST  /api/v1/tables/{table_id}/columns/reorder
-GET/POST  /api/v1/tables/{table_id}/rows
-PATCH/DELETE  /api/v1/tables/{table_id}/rows/{row_id}
-POST  /api/v1/workspaces/{workspace_id}/imports/csv/preview
-POST  /api/v1/workspaces/{workspace_id}/imports/csv
-POST  /api/v1/tables/{table_id}/imports/csv/preview
-POST  /api/v1/tables/{table_id}/imports/csv
-GET   /api/v1/tables/{table_id}/export.csv
-GET   /api/v1/workspaces/{workspace_id}/credits
-GET   /api/v1/workspaces/{workspace_id}/credits/transactions
-GET   /api/v1/system/ai/providers
-GET   /api/v1/system/ai/providers/{provider_id}/models
-POST  /api/v1/system/ai/providers/{provider_id}/check
-POST  /api/v1/system/ai/providers/ollama/test
-GET   /api/v1/enrichment/providers
-POST  /api/v1/enrichment/providers/dadata/check
-POST  /api/v1/tables/{table_id}/enrichment/columns
-POST  /api/v1/tables/{table_id}/enrichment/runs
-GET   /api/v1/tables/{table_id}/enrichment/runs
-GET   /api/v1/enrichment/runs/{run_id}
-GET   /api/v1/enrichment/runs/{run_id}/attempts
-GET   /api/v1/tables/{table_id}/rows/{row_id}/columns/{column_id}/provenance
-GET   /api/v1/tables/{table_id}/map
-```
-
-Создать таблицу: `{ "name": "Компании", "object_type": "company" }`. `created_by` берётся из JWT.
-
-Список таблиц возвращает реальный `row_count` / `column_count` (не N+1). Rows paginated: `?limit=200&offset=0`, max 500.
-
-PATCH row делает merge JSONB. `null` очищает значение.
-
-## Column Types
-
-Step 3: `text`, `number`, `boolean`, `date`, `url`, `email`, `phone`, `select`. Step 6: `enrichment`.
-
-UI может показывать Formula / Waterfall / AI Column как «Скоро». Backend такие типы отвергает (`INVALID_COLUMN_TYPE`). Смена type после создания не поддерживается.
-
-## Enrichment
-
-Первый настоящий внешний data provider: **DaData**, операция `company_by_identifier` (`POST /findById/party`, `branch_type=MAIN`).
-
-```text
-React
-  → FastAPI
-    → EnrichmentService
-      → Provider Registry
-        → DaDataEnrichmentProvider
-          → DaData API
-            → normalized result
-              → PostgreSQL (row JSONB + provenance + attempts)
-```
-
-Ключ `DADATA_API_KEY` живёт только на backend. Если пустой, provider `configured=false` («Не настроен»), run возвращает `ENRICHMENT_PROVIDER_NOT_CONFIGURED`. Нет fake Connected и нет fake company data.
-
-**Поля:** company_name, company_short_name, inn, kpp, ogrn, status, address, management_name, management_post, okved, revenue. Catalog приходит с backend capabilities, React его не хардкодит.
-
-**Credits:** только successful result. Empty input → skip, без API call. not_found / no_value / error не списывают. Flow: reserve candidates → provider calls → charge successes → release unused. Цена `DADATA_COMPANY_LOOKUP_CREDITS` (internal unit, не тариф DaData).
-
-**Sync limit:** `ENRICHMENT_SYNC_MAX_ROWS=50`. Больше → `ENRICHMENT_ASYNC_REQUIRED`. Concurrency: `ENRICHMENT_PROVIDER_CONCURRENCY=5`. Retries нет.
-
-**Provenance** отдельно от `table_rows.data`: `cell_provenance` UNIQUE(row_id, column_id). Attempts пишутся всегда (задел под Waterfall, сам Waterfall не реализован).
-
-**Delete:** table/column cascade удаляет runs/attempts/provenance. Run history не audit log.
-
-Optional live test (не в default pytest): `DADATA_INTEGRATION_TEST=true DADATA_API_KEY=... pytest -m dadata`.
-
-## Test database
-
-Pytest **никогда** не использует development `sammi`. Destructive fixtures требуют `APP_ENV=test` и имя БД `sammi_test` или `*_test`. Fallback `TEST_DATABASE_URL` → `DATABASE_URL` запрещён.
-
-Native PostgreSQL:
+Запустите Ollama на машине с установленной моделью и проверьте её имя.
 
 ```bash
-psql -h localhost -d postgres -c "CREATE DATABASE sammi_test OWNER sammi;"
+ollama list
+curl -fsS http://127.0.0.1:11434/api/tags
 ```
+
+На экране «Настройки» → AI Providers проверьте Ollama и выполните пробную генерацию. Эта проверка может использовать `OLLAMA_MODEL` или одну из установленных моделей. Анализ отношений, ассистент и распознавание аудио используют конкретную `gemma4:e2b-mlx`, заданную в [inference.py](apps/api/app/services/relationship/inference.py). Для аудио сервер Ollama должен поддерживать `/v1/audio/transcriptions`. Анализ отправляет запросы в Ollama на локальный или разрешённый приватный адрес.
+
+### SearXNG
+
+1. Сгенерируйте `SEARXNG_SECRET` командой `openssl rand -hex 32` и добавьте значение в корневой `.env`. Проектный [конфиг SearXNG](docker/searxng-settings.yml) разрешает JSON.
+2. Выберите адрес для FastAPI и запустите профиль.
+
+   | Размещение API | Значение `RELATIONSHIP_SEARCH_BASE_URL` | Команда из корня |
+   | --- | --- | --- |
+   | FastAPI в Compose | `http://searxng:8080` в корневом `.env` | `docker compose --profile search up -d searxng api` |
+   | FastAPI на хосте | `http://127.0.0.1:8888` в `apps/api/.env` | `docker compose --profile search up -d searxng` |
+   | Свой SearXNG | Базовый URL сервиса с JSON-форматом и доступом из FastAPI | Запуск выполняется на стороне инфраструктуры |
+
+3. При нативном запуске перезапустите API. Вкладка «Анализ отношений» покажет доступный переключатель веб-поиска.
+4. Для диагностики выполните пробный запрос с вымышленными или общедоступными данными.
+
+   ```bash
+   curl -fsS 'http://127.0.0.1:8888/search' \
+     --data-urlencode 'q=Linux Foundation conference' \
+     --data-urlencode 'format=json'
+   ```
+
+Адрес в `RELATIONSHIP_SEARCH_BASE_URL` задаётся без пути `/search`, который FastAPI добавляет сам. Пустое значение отключает веб-поиск по ФИО. Загрузка заданных HTTPS-ссылок, лент и локальных файлов доступна с включённым анализом отношений.
+
+## Работа с данными
+
+### Редактор таблиц
+
+Таблица принадлежит одному рабочему пространству. Поддерживаемые типы таблиц — `company`, `person`, `custom`. Типы столбцов — `text`, `number`, `boolean`, `date`, `url`, `email`, `phone`, `select`, `enrichment`. Столбец можно переименовать с сохранением значений. Тип фиксируется при создании. API строк поддерживает пагинацию `limit` и `offset`, максимум 500 строк за запрос. Редактор загружает первую страницу из 200 строк. Поиск, фильтры и сортировка редактора работают по загруженным данным. CSV-экспорт читает все строки на сервере.
+
+В разделе «Люди» отображаются контакты из подходящих таблиц workspace. Таблицы отчёта исключены из каталога, чтобы один и тот же результат анализа не создавал вторую карточку. Рекомендация доступна из каталога и по значку карточки в первой колонке исходной таблицы.
+
+### Импорт и экспорт CSV
+
+1. В рабочем пространстве выберите «Import CSV». Для добавления строк в существующую таблицу запустите импорт из её редактора.
+2. Загрузите файл. API вернёт заголовки, определённые типы, образец строк и подпись файла. Проверьте кодировку и разделитель.
+3. Для каждого заголовка выберите «создать столбец», «сопоставить с существующим» или «пропустить». Сопоставление использует индекс CSV-столбца и UUID столбца таблицы.
+4. Подтвердите импорт. Сервер проверяет ячейки и сохраняет весь импорт транзакционно. Ошибки значений возвращаются с номерами строк и столбцов. В существующей таблице импорт добавляет новые строки, поэтому повторный импорт того же файла создаёт повторные записи.
+5. Для выгрузки откройте экспорт редактора или соответствующей таблицы анализа. Сервер экспортирует заголовки в порядке столбцов и все записи в UTF-8. BOM включён по умолчанию. Поддерживаются запятая, точка с запятой и табуляция через API. Защита экспорта экранирует текстовые значения, похожие на формулы электронных таблиц.
+
+Поддерживаемые кодировки импорта — UTF-8 с BOM или без BOM и Windows-1251. Стандартные лимиты — 10 МБ на файл, 10 000 строк и 20 строк в предпросмотре. Для анализа отношений действуют отдельные лимиты.
+
+### Пример CSV для анализа отношений
+
+Сохраните пример в UTF-8. Названия компании и контактов вымышлены. Для проверки динамики касаний используйте дату в пределах последних 90 дней.
+
+```csv
+full_name,contact_id,company,title,department,decision_role,decision_authority,reports_to_id,occurred_at,channel,summary,project_id
+Ирина Волкова,c-001,Пример Инфраструктура,ИТ-директор,ИТ,ЛПР,да,,2026-11-20,Встреча,Согласовали пилот миграции,pilot-01
+Алексей Соколов,c-002,Пример Инфраструктура,Архитектор,ИТ,ЛВР,нет,c-001,2026-11-18,Звонок,Обсудили Kubernetes,pilot-01
+Алексей Соколов,c-002,Пример Инфраструктура,Архитектор,ИТ,ЛВР,нет,c-001,2026-11-21,Письмо,Уточнили требования к резервированию,pilot-01
+```
+
+Загрузите данные одного клиента в одну таблицу. Повторяйте `contact_id` и ФИО в каждой строке истории человека. Для контактов с одинаковыми ФИО задавайте разные ID. `reports_to_id` указывает на ID руководителя. При отсутствии столбца компании используется название таблицы.
+
+| Группа | Поддерживаемые заголовки |
+| --- | --- |
+| Человек | `full_name`, `contact_id`, `company`, `title`, `department` |
+| Роль и оценка | `decision_role`, `decision_authority`, `manager_influence`, `loyalty_assessment`, `account_loyalty` |
+| История | `interaction` или `summary`, `occurred_at`, `employee_name`, `employee_id`, `channel`, `direction`, `interaction_type`, `project_name`, `project_id`, `feedback`, `outcome`, `next_step`, `source_id` |
+| Связи | `reports_to_id`, `target_contact_id`, `relationship_type`, `project_id`, `influence_scope`, `strength`, `valid_from`, `valid_to`, `confidence` |
+| Публичные материалы | `public_text`, `source_url`, `event_date`, `event_title`, `event_type`, `organizer`, `person_role` |
+| Поля клиента из CRM | Например, `industry`, `active_projects`, `deal_value_total`, `last_deal_at`, `last_interaction_at`, `technology_stack` |
+
+Автоматическое сопоставление понимает русские и английские варианты распространённых полей, в том числе «ФИО», «Компания», «Должность» и «Дата встречи». Список находится в [схеме анализа](apps/api/app/schemas/relationship.py). Для нестандартных заголовков откройте форму анализа и выберите исходные столбцы вручную.
+
+## Анализ отношений
+
+### От импорта до карточки
+
+1. При создании таблицы через мастер импорта анализ по умолчанию включается для типа «Люди» или при распознавании пары столбцов ФИО и компании. Выбор виден перед подтверждением импорта.
+2. FastAPI сохраняет таблицу и ставит анализ в очередь. С настроенным SearXNG включается веб-поиск и ежедневное обновление. Если в строке есть `source_url`, загрузка ссылки дополняет материалы. Для ручного запуска откройте «Анализ отношений» в редакторе.
+3. Базовый отчёт доступен, пока выполняется обработка. В отчёте видны прогресс, число проверенных контактов, найденные ссылки, статусы публикаций и время следующего обновления.
+4. Проверьте найденные материалы, по которым требуется выбор контакта. При подтверждении укажите человека. При отклонении можно оставить комментарий. Подтверждённые источники используются для повторного расчёта, вместе с автором проверки и временем.
+5. Откройте карточку контакта. В блоке «Следующий шаг» показаны рекомендация, её автор, дата расчёта, цитаты и ссылки. Рекомендация привязана к ID контакта. Возможные авторы — Gemma 4 или правила Sammi.
+6. Используйте пять связанных таблиц в отчёте. Кнопка «Сохранить столбцы в таблицу» дополнительно переносит сводные поля в исходную таблицу.
+
+### Как работает обработка
+
+1. **Снимок и подготовка.** FastAPI сохраняет снимок исходных строк, приводит имена и поля к рабочему формату, разбивает текст на фрагменты. Вложения PDF, PPTX, HTML и текстовые документы преобразуются в текст. Записи транскрибируются локально, цитаты из них содержат временной диапазон.
+2. **Поиск и загрузка.** SearXNG получает запрос по ФИО, названию компании и общим признакам профессиональной публикации. API также обрабатывает RSS, Atom и прямые HTTPS-ссылки. Ссылки дедуплицируются, загруженные документы очищаются. Из результатов поиска выбирается до двух подходящих URL на контакт, с общим ограничением на загрузку.
+3. **Сопоставление.** Система проверяет имя, компанию, должность и, когда доступна дата, давность публикации. Для имени использует RapidFuzz, для вариантов написания и словоформ — нормализацию и русскую лемматизацию. Слабое или неоднозначное совпадение попадает на ручную проверку.
+4. **Извлечение и расчёт метрик.** Gemma 4 выделяет темы, технологии, должности, позиции, сведения о событиях, сигналы и следующий шаг. Ответ модели структурируется по JSON Schema. FastAPI проверяет, что дословная цитата присутствует в исходном фрагменте. При частичном сбое отчёт сохраняет результаты обработанных источников и базовые расчёты.
+5. **Поиск по источникам и ассистент.** Ранжирование сочетает BM25, русскую лемматизацию, словарь деловых синонимов и локальный латентный семантический анализ на NumPy. Ассистент отвечает на вопросы, готовит бриф и черновик письма. Путь к контакту строится по зафиксированным связям. Черновик можно отредактировать и использовать как основу письма.
+6. **Карта, публикация и повторный запуск.** Карта строится по `reports_to_id` и подтверждённым связям. Руководители расположены выше подчинённых. При отсутствии связи расположение опирается на роль. Предложенные моделью связи требуют подтверждения редактором. Завершение обработки обновляет связанные таблицы. Повторный поиск можно выполнять ежедневно или еженедельно либо отключить в отчёте.
+
+Задание и прогресс сохраняются в PostgreSQL. Фоновая обработка работает в процессе FastAPI и возобновляет доступные задачи после перезапуска. Без запущенного API задания ждут обработки. Изменение исходных строк делает снимок устаревшим и приостанавливает расписание до нового запуска. Повторная попытка обработки доступна при частичном результате, пока снимок актуален.
+
+### Метрики
+
+| Метрика | Как интерпретировать |
+| --- | --- |
+| `influence_level` | Шкала от 0 до 1. Вес полномочий — 30%, подтверждённых участий в решениях — 25%, связей в карте — 20%, публичной экспертизы — 15%, оценки менеджера — 10%. Отчёт показывает использованные сигналы и их источники |
+| `decision_role` | ЛПР — лицо, принимающее решение. ЛВР — лицо, влияющее на решение. ЧФПР — человек, фактически принимающий решение. В расчёте используются полномочия, история решений, влияние и явно заданная роль из CRM |
+| `last_touch_at`, `touches_90d` | Дата последнего взаимодействия и число датированных касаний за 90 дней |
+| `coverage_score` | Доля подтверждённых ключевых ролей с касанием за 90 дней. Несколько контактов одной роли считаются одной ролью в показателе |
+| `relationship_trend` | Динамика по двум 90-дневным периодам с учётом частоты касаний и обратной связи |
+| `engagement_score`, `relationship_health` | Вовлечённость по частоте и давности, затем скорректированное состояние отношений с учётом обратной связи |
+| `relationship_score` | Среднее состояние отношений по контактам, для которых хватает данных |
+| `business_relevance` | Относительный показатель по тематическим совпадениям из корпуса |
+| `profile_confidence` | Уверенность сопоставления публичного материала с контактом, основанная на доступных признаках |
+| `account_risks`, `strategic_signals` | Риски по клиенту и срабатывания по источникам, например давнее касание, негативная обратная связь, новая тема в публикации или подтверждённая смена должности |
+
+Оценки и пороги относятся к текущей реализации Sammi. Пользователь может раскрыть источники и проверить основания вывода. Поля лояльности из CRM отображаются как исходные оценки.
+
+Роль из CRM имеет приоритет. При автоматической оценке ЛПР получает контакт с правом подписи и влиянием выше `0.70`. Для контакта без права подписи проверяется число финальных решений. ЧФПР определяется при наличии как минимум двух таких решений и превышении числа согласований формального ЛПР. ЛВР определяется при влиянии выше `0.50`. Расчётные роли ЛВР и ЧФПР подтверждаются при влиянии от `0.60`. Для недостающих сигналов вклад в оценку отсутствует. Пороги задаются через окружение.
+
+### Поддерживаемые материалы и лимиты
+
+| Параметр | Значение |
+| --- | --- |
+| Один запуск | Одна таблица клиента, до 40 контактов и 1000 строк |
+| Размер корпуса | До 600 000 символов |
+| Вложения | До 8 файлов по 5 МБ, до 30 000 символов извлечённого текста на документ |
+| Форматы | PDF с текстовым слоем, PPTX, HTML, TXT, MD, SRT и VTT. Для PDF поддерживается до 60 страниц |
+| Аудио | До 3 записей длительностью до 120 секунд каждая, WAV, MP3, M4A, OGG, FLAC или AAC |
+| Ссылки и ленты | До 8 URL в форме, до 4 RSS или Atom, дополнительная загрузка из `source_url` |
+| Скачивание за проход | До 40 публикаций. Поддерживаемые типы по ссылкам — HTML, обычный текст и PDF |
+| Повторный поиск | Через 24 или 168 часов |
+| Фоновая обработка | До 360 секунд на запуск, с частичным результатом при сбое |
+
+При загрузке записи укажите ФИО или ID, чтобы добавить её в историю контакта. Расшифровка без указанного контакта проходит сопоставление как публичный материал. Для PDF-сканов подготовьте текстовый слой или приложите стенограмму.
+
+## Таблицы из презентации
+
+После обработки ссылки на пять таблиц появляются в блоке «Таблицы анализа». Каждая таблица доступна в рабочем пространстве и поддерживает CSV-экспорт. Записи автоматически обновляются после следующего анализа и по мере подтверждения новых источников. Редактирование выполняется в исходной таблице. Пустое значение показывает, что соответствующего факта или оценки в доступных источниках пока нет.
+
+Ниже все 61 поле слайда «Какие столбцы добавляем». Служебные поля для чтения и связи с исходным объектом описаны отдельно. Канонический список хранится в [datasets.py](apps/api/app/services/relationship/datasets.py).
+
+### Компании — `companies`
+
+Одна строка на клиента. Дополнительно выводится `company`.
+
+| Поле | Значение |
+| --- | --- |
+| `industry` | Отрасль из CRM |
+| `active_projects` | Активные проекты по исходным данным |
+| `deal_value_total` | Общая сумма сделок из CRM |
+| `last_deal_at` | Дата последней сделки |
+| `last_interaction_at` | Последнее известное взаимодействие |
+| `coverage_score` | Покрытие подтверждённых ключевых ролей за 90 дней |
+| `relationship_score` | Сводная оценка состояния отношений |
+| `account_risks` | Риски по клиенту |
+| `strategic_signals` | Значимые сигналы из отчёта |
+| `technology_stack` | Технологии из истории взаимодействий или CRM |
+
+### Контакты — `contacts`
+
+Одна строка на контакт. Дополнительно выводятся `full_name`, `contact_id` и `title`.
+
+| Поле | Значение |
+| --- | --- |
+| `decision_role` | Роль в принятии решений |
+| `decision_authority` | Право подписи, если указано в CRM |
+| `influence_level` | Значение влияния от 0 до 1 |
+| `department` | Подразделение |
+| `reports_to_id` | ID руководителя из исходной таблицы или подтверждённой связи |
+| `internal_owner` | Ответственный сотрудник по данным CRM |
+| `last_touch_at` | Последнее известное касание |
+| `touches_90d` | Число касаний за 90 дней |
+| `relationship_status` | Статус отношений из CRM |
+| `loyalty_assessment` | Оценка лояльности контакта из CRM |
+| `relationship_trend` | Расчётная динамика отношений |
+| `professional_topics` | Профессиональные темы |
+| `technologies_mentioned` | Упомянутые технологии |
+| `public_appearances` | Названия подтверждённых публичных материалов |
+| `profile_confidence` | Уверенность сопоставления профиля по публикациям |
+| `next_action` | Рекомендованный следующий шаг |
+
+### Взаимодействия — `interactions`
+
+Отдельная строка на касание, включая запись встречи, привязанную к контакту.
+
+| Поле | Значение |
+| --- | --- |
+| `contact_id` | ID контакта |
+| `employee_id` | ID сотрудника из CRM |
+| `occurred_at` | Дата и время взаимодействия |
+| `channel` | Канал взаимодействия |
+| `direction` | Направление из CRM |
+| `interaction_type` | Вид события |
+| `project_id` | ID проекта |
+| `topics` | Темы конкретного взаимодействия |
+| `summary` | Краткий итог по материалу |
+| `outcome` | Зафиксированный результат из CRM |
+| `feedback` | Исходная обратная связь |
+| `next_step` | Следующий шаг, записанный сотрудником в CRM |
+| `source_id` | ID исходной записи или сохранённого события |
+
+### Публичные события — `public_events`
+
+Одна строка на проверенный материал и связанного с ним человека.
+
+| Поле | Значение |
+| --- | --- |
+| `person_id` | ID контакта |
+| `event_type` | Тип события из CRM или подтверждённого текста |
+| `event_title` | Название события или публикации |
+| `event_date` | Дата публикации или события |
+| `organizer` | Указанный организатор |
+| `person_role` | Роль человека в событии |
+| `source_url` | Ссылка на первоисточник |
+| `topics` | Темы конкретного материала |
+| `technologies` | Названия технологий из материала |
+| `explicit_positions` | Явно выраженные позиции |
+| `evidence_excerpt` | Цитата или фрагмент источника |
+| `confidence` | Уверенность автоматического сопоставления |
+| `collected_at` | Время сбора материала |
+
+### Связи — `relationships`
+
+Отдельная строка на сохранённую связь между двумя контактами. Для `reports_to` исходный контакт подчиняется целевому.
+
+| Поле | Значение |
+| --- | --- |
+| `source_contact_id` | ID исходного контакта |
+| `target_contact_id` | ID целевого контакта |
+| `relationship_type` | Вид связи |
+| `project_id` | ID проекта при наличии |
+| `influence_scope` | Область влияния из источника CRM |
+| `strength` | Числовая сила связи из исходных данных |
+| `valid_from` | Начало действия по данным CRM |
+| `valid_to` | Окончание действия по данным CRM |
+| `confidence` | Оценка из источника или отметка подтверждённой связи |
+
+### 13 полей в исходной таблице
+
+Кнопка «Сохранить столбцы в таблицу» публикует поля текущего отчёта в исходную таблицу. При совпадении имени создаётся столбец с суффиксом `· анализ`. Повторная публикация обновляет уже созданные столбцы. Для нескольких строк одного контакта используется результат по его ID.
+
+```text
+decision_role        influence_level      influence_scope
+relationship_trend   coverage_score       account_risks
+professional_topics  next_action          last_touch_at
+touches_90d           next_action_sources  next_action_author
+analysis_updated_at
+```
+
+Для публикации API проверяет права на запись, актуальность снимка и состояние задания. Сами связанные таблицы обновляются автоматически при завершении анализа.
+
+## Архитектура и хранение
+
+```mermaid
+flowchart LR
+    U["Пользователь"] --> F["React · Vite · TypeScript"]
+    F -->|"REST · JWT"| A["FastAPI"]
+    A --> P[("PostgreSQL")]
+    A --> W["Фоновый анализ"]
+    W -->|"Задания и результаты"| P
+    W --> G["Ollama · Gemma 4"]
+    W --> S["SearXNG · HTTPS · RSS / Atom"]
+    A --> D["DaData"]
+    A --> N["Nominatim"]
+```
+
+- **Frontend** — React 19, TypeScript, Vite, React Router. Состояние интерфейса хранится в Zustand, сетевой слой находится в `src/services` и `src/lib/api`. Редактор использует TanStack Table и виртуализацию строк. Компоненты карты решений используют SVG, географическая карта — Leaflet.
+- **Backend** — FastAPI, Pydantic, async SQLAlchemy и asyncpg. Маршруты валидируют запросы, сервисы выполняют операции с учётом доступа, репозитории работают с PostgreSQL. Alembic применяет изменения схемы.
+- **Анализ отношений** — отдельный модуль внутри FastAPI. HTTP-запрос создаёт сохранённое задание, worker обрабатывает очередь и сохраняет прогресс. Задачи захватываются под блокировкой PostgreSQL и защищены токеном аренды. Для этого контура Redis и внешний брокер не требуются.
+- **Публикация данных** — пять производных таблиц используют тот же механизм столбцов и строк, что и редактор. Таблицы связаны с источником через `relationship_source_id` и `relationship_entity`. Обновление записей сохраняет идентичность таблиц, а повторная загрузка источников учитывает уже известные публикации.
+
+### Основные данные PostgreSQL
+
+| Данные | Хранение |
+| --- | --- |
+| Пользователи и доступ | `users`, `workspaces`, `workspace_members` |
+| Обычные таблицы и таблицы отчёта | `tables`, `table_columns`, `table_rows` |
+| Ячейки и конфиг столбца | JSONB с ключами UUID столбцов в `table_rows.data`, JSONB в `table_columns.config` |
+| Анализ отношений | `relationship_analysis_runs`: снимок материалов, сопоставление полей, отчёт, состояние, прогресс и расписание |
+| Балансы и операции | `credit_accounts`, `credit_transactions` |
+| Обогащение | `enrichment_runs`, `enrichment_attempts`, `cell_provenance` |
+| Геокодирование | `geocode_cache` |
+
+Изменение имени столбца сохраняет его UUID. `PATCH` строки объединяет переданные ячейки с текущими данными, а `null` очищает значение. Удаление столбца также убирает его ключ из JSONB. Удаление исходной таблицы каскадно удаляет её столбцы, строки и связанные таблицы анализа.
+
+Миграции лежат в [apps/api/migrations/versions](apps/api/migrations/versions). Они добавляют авторизацию и пространства, таблицы, credits, обогащение, кэш геокодирования, задания анализа, расписание и связанные таблицы. Последняя миграция схемы анализа — `0009_relationship_datasets`.
+
+### Состояния фонового анализа
+
+| Состояние | Значение |
+| --- | --- |
+| `queued` | Задание сохранено, обработчик ещё его не взял |
+| `running` | Обработка идёт, API возвращает промежуточный отчёт и прогресс |
+| `completed` | Текущий проход завершён |
+| `partial` | Доступна часть результатов, ошибка видна в отчёте |
+| `failed` | Обработка прервана |
+| `stale` | Отдельный флаг в ответе API. Исходная таблица изменилась после снимка |
+
+## Доступ, интеграции и credits
+
+### Вход и права
+
+Вход по email предназначен для бета-среды. `POST /api/v1/auth/login` нормализует email, находит или создаёт пользователя и возвращает JWT. При первом входе создаются рабочее пространство и членство с ролью `owner`. Проверка владения почтовым ящиком в этом сценарии отсутствует, поэтому для публичной эксплуатации требуется внешний контур идентификации.
+
+Frontend хранит JWT в `localStorage` под ключом `sammi.access_token` и передаёт его в `Authorization: Bearer <token>`. При выходе приложение очищает локальную сессию. Серверный JWT действует до истечения срока.
+
+| Роль | Доступ |
+| --- | --- |
+| `owner`, `admin` | Чтение, редактирование и удаление исходных таблиц, импорт, обогащение и публикация анализа |
+| `member` | Чтение, импорт, редактирование данных, обогащение и работа с анализом |
+| `viewer` | Чтение и экспорт доступных таблиц |
+
+Каждая операция с таблицей проверяет членство на сервере. Чужой UUID таблицы возвращает `404 TABLE_NOT_FOUND`. Работа с производными таблицами доступна на чтение и экспорт. Ключи облачных провайдеров задаются только серверу. В производственном режиме используются явные CORS origins и отдельный `SECRET_KEY`.
+
+### Какие данные получают интеграции
+
+| Интеграция | Передаваемые данные |
+| --- | --- |
+| Локальный Ollama | Отобранные фрагменты корпуса, вопросы к ассистенту и аудио для расшифровки |
+| SearXNG и его поисковые движки | Поисковый запрос с ФИО, компанией и профессиональными ключевыми словами |
+| Сайты публикаций и RSS | Обычный запрос на чтение выбранного публичного ресурса |
+| DaData | ИНН или ОГРН при запросе обогащения |
+| Nominatim | Адрес из выбранного столбца таблицы |
+| OpenStreetMap | Запросы тайлов карты из браузера |
+
+HTTP-загрузчик публикаций принимает публичный HTTPS, проверяет DNS и цель каждого перенаправления, ограничивает размер ответа и тип содержимого. Внешний текст обрабатывается как материал источника. Выводы Gemma проходят проверку цитат. Доступ к исходным документам и отчёту ограничен членством в пространстве.
+
+### DaData
+
+В редакторе добавьте столбец Enrichment, выберите DaData, операцию `company_by_identifier`, входной столбец с ИНН или ОГРН и выходное поле. Затем выберите строки и запустите обработку. Без `DADATA_API_KEY` интеграция показывает статус «Не настроено».
+
+FastAPI вызывает `POST /findById/party` с `branch_type=MAIN`. Поля ответа включают `company_name`, `company_short_name`, `inn`, `kpp`, `ogrn`, `status`, `address`, `management_name`, `management_post`, `okved` и `revenue`. Каталог поддерживаемых полей возвращает backend. Запуск синхронный, по умолчанию до 50 строк, с параллельностью до пяти запросов. Для каждого обработанного результата можно открыть происхождение значения, а ход запуска виден по записям попыток.
+
+### Credits
+
+Credits — внутренние единицы рабочего пространства. При первом обращении создаётся счёт и начисляется стартовый баланс `CREDITS_INITIAL_GRANT`. PostgreSQL хранит доступную и зарезервированную части, а отдельный журнал — операции `grant`, `reserve`, `charge`, `release`, `refund` и `adjustment`.
+
+Перед DaData API резервирует credits на подходящие строки. Успешные значения оплачиваются из резерва, остаток возвращается. Пустые реквизиты пропускаются. Пробная генерация Ollama и анализ отношений используют локальную модель и не расходуют credits DaData. В режиме `development` доступен служебный маршрут начисления credits.
+
+### AI-провайдеры и географическая карта
+
+- **Ollama.** Проверка сервера, список моделей и пробная генерация доступны в настройках. Генерация обращается к Ollama через API. Gemma 4 используется отдельно модулем анализа отношений.
+- **Yandex AI Studio и GigaChat.** Реестр поддерживает конфигурацию и проверки доступности. Генерация в этих адаптерах пока не включена.
+- **Географическая карта.** В `/app/map` выберите таблицу и адресный столбец. Backend возвращает координаты и счётчики найденных и пропущенных адресов. Повторные запросы используют кэш, новые запросы ограничиваются настройками геокодирования.
+
+## Маршруты и API
+
+### Страницы приложения
+
+| Маршрут | Назначение |
+| --- | --- |
+| `/`, `/product`, `/solutions`, `/integrations`, `/security`, `/pricing`, `/docs` | Публичные страницы продукта |
+| `/login` | Бета-вход по email |
+| `/app` | Рабочее пространство, недавние таблицы и баланс |
+| `/app/tables`, `/app/tables/:id` | Список и редактор таблиц, импорт и экспорт |
+| `/app/tables/:id/relationship-analysis` | Анализ клиента, вертикальная карта, проверка источников, ассистент и связанные таблицы |
+| `/app/people` | Каталог людей и карточки контактов |
+| `/app/companies`, `/app/companies/:companyId/stakeholders` | Раздел компаний и отдельная демонстрация карты ЛПР |
+| `/app/map` | Географическая карта по адресам |
+| `/app/usage`, `/app/settings` | Журнал credits, настройки и проверка провайдеров |
+| `/app/audiences`, `/app/signals`, `/app/agents`, `/app/campaigns`, `/app/campaigns/:id`, `/app/integrations` | Демонстрационные экраны и заготовки пользовательских сценариев |
+
+### Основной REST API
+
+Префикс по умолчанию — `/api/v1`. Таблицы ниже приводят пути относительно префикса. Swagger UI содержит модели запросов и ответов. Для защищённых операций передавайте Bearer JWT. `X-Request-ID` связывает ответ с журнальной записью API.
+
+| Метод | Путь | Операция |
+| --- | --- | --- |
+| GET | `/health` | Проверка API и соединения с PostgreSQL |
+| POST | `/auth/login` | Вход и получение JWT |
+| GET | `/auth/me` | Текущий пользователь |
+| POST | `/auth/logout` | Завершение клиентской сессии |
+| GET | `/workspaces` | Доступные пространства |
+| GET | `/workspaces/{workspace_id}` | Пространство и роль пользователя |
+| GET, POST | `/workspaces/{workspace_id}/tables` | Список и создание таблиц |
+| GET, PATCH, DELETE | `/tables/{table_id}` | Чтение, изменение и удаление таблицы |
+| GET, POST | `/tables/{table_id}/columns` | Список и создание столбцов |
+| PATCH, DELETE | `/tables/{table_id}/columns/{column_id}` | Обновление и удаление столбца |
+| POST | `/tables/{table_id}/columns/reorder` | Изменение порядка столбцов |
+| GET, POST | `/tables/{table_id}/rows` | Страница строк и создание строки |
+| GET, PATCH, DELETE | `/tables/{table_id}/rows/{row_id}` | Чтение, частичное изменение и удаление строки |
+| POST | `/tables/{table_id}/rows/bulk-delete` | Пакетное удаление строк |
+| POST | `/workspaces/{workspace_id}/imports/csv/preview` | Предпросмотр CSV перед созданием таблицы |
+| POST | `/workspaces/{workspace_id}/imports/csv` | Создание таблицы из CSV |
+| POST | `/tables/{table_id}/imports/csv/preview` | Предпросмотр CSV для существующей таблицы |
+| POST | `/tables/{table_id}/imports/csv` | Добавление строк из CSV |
+| GET | `/tables/{table_id}/export.csv` | Потоковый экспорт таблицы |
+| GET | `/tables/{table_id}/map` | Географические точки, опционально для заданного `column_id` |
+| GET | `/workspaces/{workspace_id}/credits` | Баланс |
+| GET | `/workspaces/{workspace_id}/credits/transactions` | Журнал операций |
+| POST | `/dev/workspaces/{workspace_id}/credits/grant` | Начисление в режиме разработки |
+| GET | `/system/ai/providers` | Конфигурация и возможности провайдеров |
+| GET | `/system/ai/providers/{provider_id}/models` | Список моделей |
+| POST | `/system/ai/providers/{provider_id}/check` | Проверка доступности |
+| POST | `/system/ai/providers/ollama/test` | Пробная генерация |
+| GET | `/enrichment/providers` | Каталог обогащения |
+| POST | `/enrichment/providers/dadata/check` | Проверка DaData |
+| POST | `/tables/{table_id}/enrichment/columns` | Создание столбца обогащения |
+| GET, POST | `/tables/{table_id}/enrichment/runs` | Список и запуск обогащения |
+| GET | `/enrichment/runs/{run_id}` | Результат запуска |
+| GET | `/enrichment/runs/{run_id}/attempts` | Попытки одного запуска |
+| GET | `/tables/{table_id}/rows/{row_id}/columns/{column_id}/provenance` | Происхождение значения ячейки |
+
+### API анализа отношений
+
+Базовый путь — `/api/v1/tables/{table_id}/relationship-analysis`.
+
+| Метод | Суффикс | Операция |
+| --- | --- | --- |
+| GET | `/setup` | Доступность анализа и поиска, сопоставление столбцов, текущий отчёт |
+| GET | пустой | Состояние, отчёт, расписание и связанные таблицы |
+| POST | пустой | Постановка нового анализа в очередь, HTTP 202 |
+| DELETE | пустой | Удаление отчёта, материалов и производных таблиц |
+| POST | `/retry` | Повторная обработка доступного запуска |
+| PATCH | `/refresh` | Изменение интервала, `hours` равен `24`, `168` или `null` |
+| POST | `/ask` | Вопрос, бриф, путь или черновик письма |
+| GET | `/contacts/by-row/{row_id}` | Анализ контакта по строке исходной таблицы |
+| POST | `/{run_id}/publish` | Публикация сводных столбцов в исходную таблицу |
+| GET | `/{run_id}/reviews/{source_id}` | Просмотр исходного текста неоднозначной публикации |
+| POST | `/{run_id}/reviews/{source_id}` | Подтверждение контакта или отклонение публикации |
+| POST | `/{run_id}/relationships/approve` | Подтверждение связи по `proposal_id` |
+
+### Примеры обращения к API
+
+Следующий пример использует локальный сервер и `jq`. Имя пользователя и таблицу можно заменить своими значениями.
 
 ```bash
-# .env
-TEST_DATABASE_URL=postgresql+asyncpg://sammi:change-me@localhost:5432/sammi_test
-DATABASE_URL=postgresql+asyncpg://sammi:change-me@localhost:5432/sammi
+SAMMI_API=http://localhost:8000/api/v1
+
+SAMMI_TOKEN=$(curl -fsS "$SAMMI_API/auth/login" \
+  -H 'Content-Type: application/json' \
+  --data '{"email":"developer@example.com"}' | jq -er '.access_token')
+
+SAMMI_WORKSPACE_ID=$(curl -fsS "$SAMMI_API/workspaces" \
+  -H "Authorization: Bearer $SAMMI_TOKEN" | jq -er '.items[0].id')
+
+curl -fsS "$SAMMI_API/workspaces/$SAMMI_WORKSPACE_ID/tables" \
+  -H "Authorization: Bearer $SAMMI_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{"name":"Клиент для анализа","object_type":"person"}'
 ```
+
+Чтобы создать таблицу из CSV через API, сохраните приведённый выше пример в `client.csv`. Сначала запросите предпросмотр и подпись файла, затем подтвердите импорт. Для краткости в этом примере все исходные столбцы создаются как текстовые. Анализ самостоятельно разберёт дату взаимодействия.
 
 ```bash
-cd apps/api
-DATABASE_URL=$TEST_DATABASE_URL alembic upgrade head
-TEST_DATABASE_URL=postgresql+asyncpg://sammi:change-me@localhost:5432/sammi_test pytest
+SAMMI_IMPORT_API="$SAMMI_API/workspaces/$SAMMI_WORKSPACE_ID/imports/csv"
+SAMMI_PREVIEW=$(curl -fsS "$SAMMI_IMPORT_API/preview" \
+  -H "Authorization: Bearer $SAMMI_TOKEN" -F 'file=@client.csv')
+SAMMI_SIGNATURE=$(printf '%s' "$SAMMI_PREVIEW" | jq -er '.file_signature')
+SAMMI_MAPPING=$(printf '%s' "$SAMMI_PREVIEW" | jq -c \
+  '{columns: [.headers[] | {csv_index: .index, action: "create", name, type: "text"}]}')
+SAMMI_OPTIONS=$(jq -cn --arg signature "$SAMMI_SIGNATURE" \
+  '{file_signature: $signature, table_name: "Пример Инфраструктура", object_type: "person", analyze_relationships: true}')
+
+SAMMI_IMPORT=$(curl -fsS "$SAMMI_IMPORT_API" \
+  -H "Authorization: Bearer $SAMMI_TOKEN" -F 'file=@client.csv' \
+  --form-string "mapping_json=$SAMMI_MAPPING" --form-string "options_json=$SAMMI_OPTIONS")
+SAMMI_TABLE_ID=$(printf '%s' "$SAMMI_IMPORT" | jq -er '.table_id')
 ```
 
-Docker (если демон доступен): тот же `CREATE DATABASE` через `docker compose exec db psql ...`. Compose hostname `db` в TEST_DATABASE_URL на хосте переписывается в `localhost`.
+Проверка состояния и экспорт применимы к таблице из этого импорта или к UUID из редактора. Команда с `--data` запускает анализ вручную и предполагает настроенный SearXNG. Выполните её, если нужно отдельно поставить анализ в очередь.
 
-## Row JSONB storage
+```bash
+SAMMI_ANALYSIS="$SAMMI_API/tables/$SAMMI_TABLE_ID/relationship-analysis"
+
+curl -fsS "$SAMMI_ANALYSIS/setup" -H "Authorization: Bearer $SAMMI_TOKEN"
+
+# Ручной запуск для таблицы, где ещё не выполняется анализ
+curl -fsS "$SAMMI_ANALYSIS" \
+  -H "Authorization: Bearer $SAMMI_TOKEN" \
+  -H 'Content-Type: application/json' \
+  --data '{"web_search":true,"fetch_csv_urls":true,"refresh_hours":24}'
+
+curl -fsS "$SAMMI_ANALYSIS" -H "Authorization: Bearer $SAMMI_TOKEN"
+
+curl -fsS "$SAMMI_API/tables/$SAMMI_TABLE_ID/export.csv?delimiter=semicolon" \
+  -H "Authorization: Bearer $SAMMI_TOKEN" -o contacts.csv
+```
+
+Подробности формата запросов:
+
+- CSV использует multipart с `file`, `mapping_json`, `options_json` и необязательным `delimiter`. Возьмите `file_signature` из предпросмотра. Для создания столбца передайте `csv_index`, `action: "create"`, `name` и `type`. Для сопоставления используйте `action: "existing"` и `column_id`.
+- Чтобы импорт новой таблицы поставил анализ в очередь, передайте `"analyze_relationships": true` в `options_json`. Ответ различает успешный импорт и постановку анализа по полям `analysis_started` и `analysis_error`.
+- Для ручного анализа с файлами отправьте multipart с полем `config`, содержащим JSON, и повторяющимися полями `files`. Порядок файлов должен соответствовать массиву `documents` в конфигурации. У документа можно указать `title`, `url`, `date` и `contact`.
+- Для `/ask` передайте `question` и, при необходимости, `intent` со значением `question`, `brief`, `path` или `email`. Фокус по человеку задаётся через `contact_id`, для поиска пути используется `target_id`. Ответ содержит пункты со статусом `evidence`, `hypothesis` или `draft`.
+
+Ошибки структурированы одинаково. Технический код подходит для обработки в клиенте, сообщение объясняет ошибку, а `details` может содержать дополнительные данные.
 
 ```json
-{ "0385…column-uuid": "Selectel", "7321…column-uuid": 520 }
+{
+  "error": {
+    "code": "TABLE_NOT_FOUND",
+    "message": "Table not found",
+    "details": null
+  }
+}
 ```
 
-API никогда не возвращает orphaned keys. При delete column ключ удаляется из JSONB.
+## Параметры окружения
 
-## Pagination
+Шаблон — [`.env.example`](.env.example). Для Vite используются параметры `VITE_*` из корня проекта. FastAPI читает окружение процесса и файлы `.env`. При запуске из `apps/api` локальный файл этого каталога переопределяет совпадающие параметры корневого файла. Compose передаёт в контейнеры явно перечисленные в [docker-compose.yml](docker-compose.yml) параметры. Секреты и токены хранятся в локальных файлах окружения или в настройках среды развёртывания.
 
-Offset pagination для beta. Search/filter/sort в редакторе — client-side по загруженной странице, не по всей базе. Cursor pagination — later.
+### База, API и frontend
 
-## Workspace Isolation
+| Переменная | По умолчанию или пример | Назначение |
+| --- | --- | --- |
+| `APP_ENV` | `development` | Режим API. В тестах устанавливается `test` |
+| `APP_NAME` | `Sammi API` | Имя приложения в OpenAPI |
+| `API_V1_PREFIX` | `/api/v1` | Префикс маршрутов. Интерфейс и проверка Compose ожидают стандартный префикс |
+| `DATABASE_URL` | `postgresql+asyncpg://sammi:change-me@localhost:5432/sammi` | Рабочая база API. URL PostgreSQL без драйвера нормализуется под asyncpg |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | `sammi`, `sammi`, пароль из окружения | Параметры PostgreSQL в Compose |
+| `SECRET_KEY` | Случайная строка | Подпись JWT |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `10080` | Срок JWT в минутах |
+| `CORS_ORIGINS` | `http://localhost:3000` | Разрешённые origins через запятую |
+| `FRONTEND_URL` | `http://localhost:3000` | URL frontend в конфигурации API |
+| `LOG_LEVEL` | `INFO` | Уровень журналирования |
+| `VITE_API_URL` | `http://localhost:8000` | Адрес API для браузера. Если пуст, запросы идут на текущий origin, а Vite dev server проксирует `/api` |
+| `VITE_ENABLE_DEMO_DATA` | `false` | Включение демонстрационных данных в поддерживаемых сценариях |
+| `TEST_DATABASE_URL` | URL базы `sammi_test` | База для pytest и тестовых миграций |
 
-Нельзя открыть table по UUID без membership. Чужой workspace получает `404 TABLE_NOT_FOUND`. Viewer — read only (`403 TABLE_ACCESS_DENIED`). Delete table — owner/admin.
+### Ollama, веб-поиск и пороги
 
-## How to create first real table
+| Переменная | По умолчанию | Назначение |
+| --- | --- | --- |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Базовый URL Ollama |
+| `OLLAMA_MODEL` | пусто | Модель для общей пробной генерации через настройки |
+| `OLLAMA_TIMEOUT_SECONDS` | `60` | Сетевой таймаут Ollama. Для извлечения действует дополнительный предел модуля |
+| `RELATIONSHIP_AI_ENABLED` | `true` | Включение новых запусков, фоновой обработки и ассистента |
+| `RELATIONSHIP_SEARCH_BASE_URL` | пусто | Базовый URL SearXNG для анализа |
+| `SEARXNG_SECRET` | задаётся отдельно | Секрет экземпляра SearXNG в Compose |
+| `RELATIONSHIP_IDENTITY_THRESHOLD` | `0.78` | Минимальная уверенность автоматического сопоставления публикации |
+| `RELATIONSHIP_DECISION_THRESHOLD` | `0.70` | Порог по влиянию для расчёта роли ЛПР |
+| `RELATIONSHIP_INFLUENCE_THRESHOLD` | `0.50` | Порог расчёта роли ЛВР |
+| `RELATIONSHIP_CONFIRMATION_THRESHOLD` | `0.60` | Порог подтверждения расчётной роли |
+| `RELATIONSHIP_STALE_ALERT_MIN_TOUCHES` | `3` | Минимум касаний в предыдущем окне для сигнала о потере контакта |
 
-1. Login на `/login`
-2. `/app/tables` → Import CSV или Создать таблицу
-3. Preview → mapping → Импортировать
-4. Откроется `/app/tables/<uuid>`
-5. Edit cells, reload — данные в PostgreSQL
-6. Export CSV скачивает всю таблицу
+### CSV, credits и внешние провайдеры
 
-Swagger: login → token → workspace → preview CSV → import → export.csv.
+| Переменная | По умолчанию | Назначение |
+| --- | --- | --- |
+| `CSV_MAX_FILE_SIZE_MB` | `10` | Максимальный размер импорта |
+| `CSV_MAX_ROWS` | `10000` | Лимит строк импорта |
+| `CSV_PREVIEW_ROWS` | `20` | Размер предпросмотра в строках |
+| `CREDITS_INITIAL_GRANT` | `1000` | Стартовый баланс workspace |
+| `DADATA_API_KEY` | пусто | Ключ DaData |
+| `DADATA_BASE_URL` | `https://suggestions.dadata.ru/suggestions/api/4_1/rs` | Базовый адрес DaData |
+| `DADATA_TIMEOUT_SECONDS` | `15` | Таймаут запроса |
+| `DADATA_COMPANY_LOOKUP_CREDITS` | `1` | Стоимость успешного значения в credits |
+| `ENRICHMENT_SYNC_MAX_ROWS` | `50` | Максимум строк в синхронном запуске |
+| `ENRICHMENT_PROVIDER_CONCURRENCY` | `5` | Параллельность запросов обогащения |
+| `ENRICHMENT_STORE_RAW_RESPONSES` | `false` | Сохранение сырых ответов провайдера |
+| `GEOCODING_BASE_URL` | `https://nominatim.openstreetmap.org` | Провайдер геокодирования |
+| `GEOCODING_USER_AGENT` | `sammi-beta/0.1 (beta contact map)` | Идентификатор клиента геокодирования |
+| `GEOCODING_TIMEOUT_SECONDS` | `10` | Таймаут геокодирования |
+| `GEOCODING_MAX_REQUESTS` | `25` | Максимум новых запросов за обращение за точками |
+| `YANDEX_AI_API_KEY`, `YANDEX_AI_PROJECT_ID`, `YANDEX_AI_MODEL` | пусто | Данные подключения Yandex AI Studio |
+| `YANDEX_AI_BASE_URL` | `https://ai.api.cloud.yandex.net/v1` | URL Yandex AI Studio |
+| `GIGACHAT_AUTH_KEY`, `GIGACHAT_MODEL` | пусто | Ключ и модель GigaChat |
+| `GIGACHAT_SCOPE` | `GIGACHAT_API_PERS` | Scope OAuth |
+| `GIGACHAT_BASE_URL` | `https://api.giga.chat` | URL GigaChat |
+| `GIGACHAT_AUTH_URL` | `https://ngw.devices.sberbank.ru:9443/api/v2/oauth` | URL получения OAuth-токена |
+| `GIGACHAT_VERIFY_SSL` | `true` | Проверка TLS в адаптере GigaChat |
 
-## CSV Import / Export
+## Тестирование и сборка
 
-Первый полезный beta-workflow: upload CSV → preview → mapping → import в PostgreSQL → Table Editor → export CSV.
+### Безопасное окружение для pytest
 
-**Limits (config):** `CSV_MAX_FILE_SIZE_MB=10`, `CSV_MAX_ROWS=10000`, `CSV_PREVIEW_ROWS=20`.
+Все команды pytest в этом проекте направляйте только в `sammi_test`. Фикстуры выполняют операции с тестовыми данными. Тестовый запуск требует `TEST_DATABASE_URL` и не использует рабочий `DATABASE_URL` как запасной вариант.
 
-**Encodings:** UTF-8, UTF-8 BOM, CP1251. Иначе `CSV_ENCODING_UNSUPPORTED`.
-
-**Delimiters:** comma, semicolon, tab. Detection через `csv.Sniffer` + fallback. Пользователь может задать delimiter явно и перезапросить preview.
-
-**Preview** ничего не пишет в БД. Backend — source of truth (frontend CSV не парсит).
-
-**Mapping** по CSV column index: create / existing (column UUID) / skip. Имена заголовков не являются identity.
-
-**Validation:** strict, all-or-nothing. Одна невалидная ячейка — весь import rollback. Первые 50 ошибок в `CSV_VALIDATION_FAILED`.
-
-**Create table from CSV:** `POST /workspaces/{id}/imports/csv` создаёт table + columns + rows в одной транзакции. Имя по умолчанию — filename без расширения. `object_type` default `custom`.
-
-**Existing table:** append-only, без dedupe/upsert. Viewer не может import. Owner/admin/member могут.
-
-**Export:** `GET /tables/{id}/export.csv` стримит все rows (не только page 200). Headers = `column.name` в порядке `position`. UTF-8, BOM default on. Delimiter default **comma** (`?delimiter=semicolon`). `safe_for_spreadsheets=true` по умолчанию префиксует `'` у значений, начинающихся на `= + - @` (числа не трогает). Filename из имени таблицы, без path traversal. Viewer может export.
-
-**Не поддерживается:** XLSX, Google Sheets, background/job import, merge/upsert, dedupe, import history.
-
-## Design system
-
-Единый визуальный язык для Landing, Login и App. Источник: `SKILL-feelistic-aries.md` (HYBRID: 60% Feelistic discipline × 40% Aries atmosphere).
-
-Токены: `src/styles/tokens.css`. Motion: `src/lib/motion/tokens.ts`. Шрифты: Instrument Sans, Instrument Serif (только editorial), IBM Plex Mono (технические значения).
-
-Landing — cinematic dark emerald. App — warm ivory. Dark app theme использует ту же emerald-семью, что marketing canvas. Teal — action/selection. Champagne — редкий verified signal, не вторая primary.
-
-## SKILL-feelistic-aries.md
-
-Primary design source of truth в корне репозитория. Palette, typography, motion grammar, section archetypes, anti-generic rules и quality gates читаются оттуда. Feature behaviour прототипа сохраняется, визуальный конфликт решается в пользу skill.
-
-## Development
-
-Нужны Docker и Node.js.
+Для PostgreSQL из Compose создайте отдельную базу один раз. Пример использует роль `sammi`.
 
 ```bash
-cp .env.example .env
-docker compose up --build
-docker compose exec api alembic upgrade head
+docker compose exec db psql -U sammi -d postgres \
+  -c 'CREATE DATABASE sammi_test OWNER sammi;'
 ```
 
-- Frontend: http://localhost:3000
-- API: http://localhost:8000
-- Swagger: http://localhost:8000/docs
-- Health: http://localhost:8000/api/v1/health
+Ту же команду можно выполнить с хоста через `psql` под ролью, которой разрешено создавать базы. Если PostgreSQL работает в Compose, запустите тесты с хоста через опубликованный порт `5432`.
 
-Миграции не запускаются автоматически при старте контейнера. `alembic upgrade head` безопасен, если база уже на head.
-
-Локальный Vite, если API и Postgres уже в Docker:
+В активированном Python-окружении из каталога `apps/api` задайте URL с тестовым именем базы и своим локальным паролем. Следующий запуск отдельно проверяет имя перед миграцией и pytest.
 
 ```bash
-npm install
-npm run dev
+export TEST_DATABASE_URL='postgresql+asyncpg://sammi:change-me@localhost:5432/sammi_test'
+
+python - <<'PY'
+import os
+import subprocess
+import sys
+
+from tests.db_guard import database_name_from_url, require_test_database_url
+
+test_url = require_test_database_url()
+if database_name_from_url(test_url) != "sammi_test":
+    raise SystemExit("Expected sammi_test")
+
+test_env = dict(os.environ, APP_ENV="test", DATABASE_URL=test_url, TEST_DATABASE_URL=test_url)
+subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], env=test_env, check=True)
+subprocess.run([sys.executable, "-m", "pytest", "-q", "-rs"], env=test_env, check=True)
+PY
 ```
+
+В набор входят проверка изоляции workspace, CRUD таблиц, CSV и валидация, ledger и списания, DaData, геокодирование, сопоставление контактов, загрузка публикаций, расписание, публикация результатов и все 61 поле пяти таблиц. Тесты сценариев используют PostgreSQL. Внешние вызовы заменяются тестовыми ответами, кроме явно включённых проверок провайдеров.
+
+### Проверки с реальными провайдерами
+
+После подготовки той же базы `sammi_test` можно запустить опциональные тесты.
+
+```bash
+# Понадобится запущенный Ollama и установленная gemma4:e2b-mlx
+OLLAMA_INTEGRATION_TEST=true python -m pytest -m ollama -q -rs
+
+# Понадобится DADATA_API_KEY в окружении процесса
+DADATA_INTEGRATION_TEST=true python -m pytest -m dadata -q -rs
+```
+
+Проверка Ollama включает обращение к модели и проверку цитируемого ответа по материалу. Проверка DaData обращается к реальному провайдеру. Автоматический поиск можно проверить вручную через импорт вымышленного набора для обработки CRM или набор публичных контактов для сквозного поиска. В отчёте проверьте состояние источников, появление подтверждённой публикации, пять таблиц и показ рекомендации в карточке.
+
+### Проверки frontend
+
+Из корня проекта:
+
+```bash
+npm ci
+npm run typecheck
+npm run lint
+npm run build
+npm run preview
+```
+
+Vite собирает версию для публикации в `dist/`. Сценарий `npm run capture:screens` использует Playwright и переменную `CAPTURE_BASE_URL`, по умолчанию `http://localhost:3000`. Это утилита для старых демонстрационных экранов и локальной демонстрационной сессии. После перехода на JWT и выключения демоданных её сценарии могут потребовать обновления. В актуальные проверки проекта входят TypeScript, ESLint, сборка и backend-тесты.
+
+## Развёртывание и диагностика
+
+### Миграции и окружения
+
+- **Локально.** Запускайте `python -m alembic current` и `python -m alembic upgrade head` из `apps/api` под нужным `DATABASE_URL`. Контейнер Compose запускает Uvicorn, миграции применяются отдельно через `docker compose exec api alembic upgrade head`.
+- **Render.** [Blueprint](render.yaml) описывает статический frontend, FastAPI и PostgreSQL. Сервис API применяет Alembic до запуска Uvicorn. Статический сервис собирает `dist/` и перенаправляет прямые SPA-маршруты на `index.html`. URL API передаётся на этапе сборки frontend, origin frontend используется в CORS.
+- **Анализ в развёрнутом окружении.** Полный сценарий требует доступного Ollama с нужной моделью, SearXNG для веб-поиска и FFmpeg для аудио. Эти сервисы и бинарник нужно предоставить среде, в которой выполняется API. Ollama и SearXNG в Blueprint не описаны. Расписание продвигается, пока процесс FastAPI работает.
+- **Данные.** `docker compose down` останавливает сервисы. PostgreSQL использует том `postgres_data`. Команда `docker compose down -v` удаляет тома проекта вместе с данными, поэтому применяйте её только для намеренного сброса.
+- **Секреты и публикация.** Задавайте секреты через окружение и используйте контекст сборки без локальных файлов с ключами. Для публичной эксплуатации настройте контур аутентификации, сетевой доступ и политику обработки данных под свою инфраструктуру.
+
+### Проверки состояния
 
 ```bash
 docker compose ps
+docker compose logs --tail 100 api
+docker compose --profile search logs --tail 100 searxng
 docker compose exec api alembic current
-docker compose exec api pytest
-npm run lint
-npm run typecheck
-npm run build
-npm run preview
-npm run capture:screens
+curl -fsS http://localhost:8000/api/v1/health
 ```
 
-## Environment
+Ответ health при доступном PostgreSQL:
 
-Смотри `.env.example`. `.env` не коммитится.
-
-```bash
-VITE_API_URL=http://localhost:8000
-VITE_ENABLE_DEMO_DATA=false
+```json
+{"status":"ok","database":"ok"}
 ```
 
-`VITE_ENABLE_DEMO_DATA=true` включает старые fixtures. По умолчанию списки в `/app` пустые. Browser ходит в API по `http://localhost:8000`. Контейнер API ходит в Postgres по hostname `db`. Pytest с хоста использует `localhost:5432` (см. `apps/api/README.md`).
+Проверки внешних интеграций выполняются отдельно через настройки или их API.
 
-## Known limitations
+| Симптом | Что проверить |
+| --- | --- |
+| `DATABASE_UNAVAILABLE` или HTTP 503 на health | Запущен ли PostgreSQL. Проверьте имя базы и подходящий хост. Для API в Compose это `db`, для API на хосте обычно `localhost` |
+| PostgreSQL сообщает об отсутствующей таблице или колонке | Проверьте `alembic current` и примените `alembic upgrade head` к целевой базе |
+| Запросы заблокированы CORS | Origin из адресной строки должен входить в `CORS_ORIGINS` вместе со схемой и портом |
+| Frontend возвращает `NETWORK_ERROR` | Проверьте `VITE_API_URL`, доступность health и процесс API. После изменения параметра перезапустите Vite |
+| Доступ к таблице возвращает `404` | Проверьте workspace и наличие членства. После повторного входа используйте таблицу текущего пользователя |
+| Ошибка CSV или импорт не проходит | Перепроверьте разделитель, кодировку, сопоставление и подпись файла из предпросмотра. В ответе смотрите `error.details` |
+| Отчёт не стартует после импорта | Посмотрите сообщение об анализе в мастере. В таблице должен быть столбец ФИО. Для смешанных данных выделите одного клиента |
+| Веб-поиск выключен | Проверьте `RELATIONSHIP_SEARCH_BASE_URL` и перезапустите API. Для API в Compose используется адрес `searxng:8080`, на хосте — `127.0.0.1:8888` |
+| SearXNG принимает запрос, но возвращает пустую выдачу или HTTP 403 | Проверьте, включён ли JSON. Посмотрите `unresponsive_engines` в ответе сервиса. Для частичного результата можно добавить проверенную HTTPS-ссылку или RSS |
+| Публикация не попала в профиль | В отчёте проверьте статус загрузки и раздел «Проверка источников». Для автоматической привязки должны сойтись признаки контакта |
+| Ollama недоступен или модель не найдена | Проверьте `/api/tags`, точное имя `gemma4:e2b-mlx` и доступность Ollama из окружения FastAPI. Адрес зависит от того, где запущен API |
+| Аудио не обработалось | Проверьте FFmpeg, лимит размера, длительность и доступность `/v1/audio/transcriptions` |
+| Отчёт отмечен устаревшим | Запустите анализ заново. После пересборки снимка можно восстановить расписание и опубликовать результат |
+| Задание долго в очереди | Проверьте запущенный FastAPI и `RELATIONSHIP_AI_ENABLED=true`. В режиме тестов выполнение задач инициируется тестовым кодом |
+| Enrichment просит настройку провайдера или превышен лимит | Проверьте `DADATA_API_KEY`, количество выбранных строк и доступный баланс. Для больших запусков разделите строки на порции |
+| pytest остановился перед началом | Проверьте, что `TEST_DATABASE_URL` указывает на `sammi_test`, база существует и на ней применены миграции |
+| Порт 3000, 5432, 8000 или 8888 занят | Используйте уже работающий экземпляр или измените порты запуска и связанные URL |
 
-- Search / filter / sort в Table Editor работают только по загруженной странице rows (до 200), не по всей базе. CSV export читает всю таблицу на backend.
-- Views не персистятся: новая таблица имеет только «Все».
-- Concurrent cell edits: last-write-wins, без optimistic concurrency.
-- Billing, waterfall, AI Column, XLSX, CRM — не реализованы и не показывают fake success.
-- Enrichment синхронный, max 50 rows, один provider (DaData), без retry и без worker.
-- Type колонки после создания менять нельзя.
-- CSV import синхронный до 10k rows; большие файлы → future job queue.
+## Структура репозитория
 
-## Troubleshooting
-
-- `503` / `DATABASE_UNAVAILABLE`: Postgres не готов или неверный URL. `docker compose ps`, `docker compose logs api`.
-- CORS: origin фронтенда должен быть в `CORS_ORIGINS` (`http://localhost:3000`).
-- Порт 3000 занят локальным `npm run dev` — не поднимайте второй frontend.
-- Docker Desktop не стартует (например, `Failed to install Rosetta`): поднимите PostgreSQL 16 локально и из `apps/api` запустите `DATABASE_URL=postgresql+asyncpg://sammi:change-me@localhost:5432/sammi .venv/bin/uvicorn app.main:app --port 8000`. В `.env` для Compose хост базы — `db`, для процесса на хосте — `localhost`.
-- Данные Postgres живут в volume `postgres_data`. `docker compose down -v` удаляет volume.
-
-## Build
-
-Production bundle собирается Vite в `dist/`. Скриншот-скрипт в бандл не входит.
-
-## Screenshot capture
-
-Требует запущенный dev server. `CAPTURE_BASE_URL` по умолчанию `http://localhost:3000`.
-
-Landing использует реальные снимки текущего UI, а не fake dashboard.
-
-```bash
-npm run dev
-npm run capture:screens
+```text
+.
+├── src/
+│   ├── components/              # Компоненты UI, оболочка приложения, авторизация
+│   ├── features/
+│   │   ├── tables/              # Табличный редактор, импорт, экспорт и представления
+│   │   ├── relationship/        # Отчёт, ассистент, проверка, рекомендации
+│   │   ├── stakeholders/        # Вертикальная карта и отдельные демо-данные
+│   │   └── enrichments/         # Настройка столбцов обогащения
+│   ├── lib/api/                 # HTTP-клиент и токен
+│   ├── pages/                   # Маршруты приложения и публичные страницы
+│   ├── services/                # Типизированные клиенты и демонстрационные сервисы
+│   ├── stores/                  # Состояние интерфейса
+│   └── styles/                  # Дизайн-токены и глобальные стили
+├── apps/api/
+│   ├── app/
+│   │   ├── api/v1/              # HTTP-маршруты
+│   │   ├── core/                # Настройки, обработка ошибок и журналы
+│   │   ├── models/              # SQLAlchemy и схема хранения
+│   │   ├── providers/           # Ollama, DaData, Nominatim и AI-провайдеры
+│   │   ├── repositories/        # Запросы к PostgreSQL
+│   │   ├── schemas/             # Pydantic-модели
+│   │   └── services/
+│   │       ├── csv/             # Парсинг, сопоставление, импорт и экспорт
+│   │       └── relationship/    # Источники, ML, метрики, очередь и публикация
+│   ├── migrations/              # Alembic
+│   └── tests/                   # API, сервисы, фикстуры и защита тестовой базы
+├── docker/                      # Образ frontend и настройки SearXNG
+├── public/                      # Изображения и ресурсы frontend
+├── scripts/                     # Утилиты разработки
+├── docker-compose.yml           # Локальный стек
+├── render.yaml                  # Blueprint Render
+└── .env.example                 # Шаблон окружения
 ```
 
-Playwright (вне production bundle) ставит mock session, открывает рабочие маршруты и пишет PNG в `public/product/` (1440×900, light product mode): dashboard, tables, table-editor, add-column, waterfall, ai-column, run-state, signals, integrations, audiences.
+### Где смотреть реализацию
 
-## Карта ЛПР (демо для кейса КРОК)
+| Задача | Файл или каталог |
+| --- | --- |
+| Маршруты и приложение React | [src/root.tsx](src/root.tsx) |
+| CRUD таблиц и права на запись | [app/services/table.py](apps/api/app/services/table.py) |
+| Контракт анализа | [app/schemas/relationship.py](apps/api/app/schemas/relationship.py) |
+| Подготовка корпуса и идентификация | [prepare.py](apps/api/app/services/relationship/prepare.py) |
+| Загрузка и веб-поиск | [publications.py](apps/api/app/services/relationship/publications.py), [web_search.py](apps/api/app/services/relationship/web_search.py), [discovery.py](apps/api/app/services/relationship/discovery.py) |
+| Gemma и локальное ранжирование | [inference.py](apps/api/app/services/relationship/inference.py), [retrieval.py](apps/api/app/services/relationship/retrieval.py) |
+| Метрики и фоновые задания | [metrics.py](apps/api/app/services/relationship/metrics.py), [runs.py](apps/api/app/services/relationship/runs.py) |
+| 61 поле и проекция результата | [datasets.py](apps/api/app/services/relationship/datasets.py), [output.py](apps/api/app/services/relationship/output.py) |
+| Вертикальное расположение графа | [graph-layout.ts](src/features/stakeholders/graph-layout.ts) |
+| Серверные сценарии и тесты | [apps/api/README.md](apps/api/README.md), [apps/api/tests](apps/api/tests) |
 
-На странице **Компании** открыт отдельный блок с тремя вымышленными демонстрационными клиентами. Переход по карточке ведёт на `/app/companies/:companyId/stakeholders`. Эти клиенты и записи не добавляются в пользовательские таблицы; `VITE_ENABLE_DEMO_DATA` для них не требуется. Оценки, связи и взаимодействия сохраняются только в `localStorage` браузера под ключом `sammi.stakeholders.demo.v1`. «Источник данных» показывает разницу между mock CRM, данными карты и ожидаемым направлением обмена. Применение изменений обновляет только отдельную локальную копию mock CRM; во внешнюю CRM или API данные не отправляются. «Сбросить демо» возвращает выбранного клиента к демонстрационному набору.
+Дополнительный контекст кейса находится в [бизнес-анализе КРОК](KROK_Business_Analysis_Sammi.md) и [техническом задании на интерфейс](CODEX_UI_TZ_Sammi_KROK.md). [Контракт Stakeholder Map](BACKEND_CONTRACT_STAKEHOLDERS.md) описывает отдельный предложенный CRM-контур демонстрационной карты. Актуальные маршруты и поведение рабочего анализа приведены в этом README и в OpenAPI.
 
-Реальный серверный контракт для сущностей аккаунта, контакта, оценки, связи, взаимодействия и CRM outbox пока отсутствует. До его реализации карта работает только в локальном демонстрационном режиме; действующие таблицы и географический endpoint `/api/v1/tables/{id}/map` не используются.
+### Интерфейс и дизайн-токены
+
+Светлая и тёмная темы используют общие [токены](src/styles/tokens.css). Основной шрифт интерфейса — Instrument Sans, для редакционных заголовков используется Instrument Serif, для технических значений — IBM Plex Mono. Общие настройки движения находятся в [motion tokens](src/lib/motion/tokens.ts).
+
+### Лицензия
+
+Код распространяется под [Apache License 2.0](LICENSE).

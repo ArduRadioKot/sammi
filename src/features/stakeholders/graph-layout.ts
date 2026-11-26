@@ -2,100 +2,100 @@ import type { StakeholderContact, StakeholderEdge } from "./repository";
 
 export type Point = { x: number; y: number };
 export type Size = { width: number; height: number };
-type Node = Point & { column: number; row: number; contact: StakeholderContact };
+type Node = Point & { row: number; column: number; contact: StakeholderContact };
 
 export const CARD = { width: 224, height: 76 };
-const COLUMN_STEP = CARD.width + 80;
-const ROW_STEP = CARD.height + 50;
-const LEFT = 20;
-const TOP = 72;
+const COLUMN_STEP = CARD.width + 72;
+const ROW_STEP = CARD.height + 65;
+const LEFT = 26;
+const TOP = 52;
+const PER_ROW = 3;
+const ROLE_LEVEL: Record<StakeholderContact["role"], number> = {
+  decision_maker: 0, actual_decider: 0, influencer: 1, initiator: 1, technical_expert: 1, procurement: 1,
+  user: 2, unknown: 2,
+};
 
-export function layoutGraph(contacts: StakeholderContact[], departments: readonly string[]) {
-  const groups = new Map<string, StakeholderContact[]>();
-  for (const contact of contacts) {
-    const department = contact.department || "Без подразделения";
-    const group = groups.get(department) ?? [];
-    group.push(contact);
-    groups.set(department, group);
+export function layoutGraph(contacts: StakeholderContact[], edges: StakeholderEdge[], departments: readonly string[]) {
+  const people = new Map(contacts.map((contact) => [contact.id, contact]));
+  const managers = new Map<string, string[]>();
+  for (const edge of edges) {
+    if (edge.type !== "reports_to" || edge.confidence !== "verified" || !people.has(edge.toId) || !people.has(edge.fromId)) continue;
+    managers.set(edge.fromId, [...(managers.get(edge.fromId) ?? []), edge.toId]);
   }
 
-  const names = [...new Set([...departments, ...groups.keys()])].filter((name) => groups.has(name));
+  const supervisors = new Set([...managers.values()].flat());
+  const levels = new Map<string, number>();
+  const pending = new Set(people.keys());
+  while (pending.size) {
+    const ready = [...pending].filter((id) => (managers.get(id) ?? []).every((manager) => levels.has(manager)));
+    if (!ready.length) break;
+    for (const id of ready) {
+      const parents = managers.get(id) ?? [];
+      const fallback = ROLE_LEVEL[people.get(id)!.role];
+      // A named manager belongs above their reports, even when their decision role is unknown.
+      const isManager = supervisors.has(id);
+      const level = parents.length ? Math.max(...parents.map((parent) => levels.get(parent)!)) + 1 : isManager ? 0 : fallback;
+      levels.set(id, level);
+      pending.delete(id);
+    }
+  }
+  const groups = new Map<number, StakeholderContact[]>();
+  for (const contact of contacts) {
+    const level = levels.get(contact.id) ?? ROLE_LEVEL[contact.role];
+    groups.set(level, [...(groups.get(level) ?? []), contact]);
+  }
+
   const nodes = new Map<string, Node>();
-  let rowCount = 1;
-  const columns = names.map((name, column) => {
-    const x = LEFT + CARD.width / 2 + column * COLUMN_STEP;
-    const group = groups.get(name) ?? [];
-    group.forEach((contact, row) => {
-      nodes.set(contact.id, { x, y: TOP + CARD.height / 2 + row * ROW_STEP, column, row, contact });
-    });
-    rowCount = Math.max(rowCount, group.length);
-    return { name, x };
-  });
+  const columns = Math.max(1, ...[...groups.values()].map((group) => Math.min(PER_ROW, group.length)));
+  const cardsWidth = CARD.width + (columns - 1) * COLUMN_STEP;
+  const departmentOrder = new Map(departments.map((name, index) => [name, index]));
+  let row = 0;
+  for (const [, group] of [...groups.entries()].sort(([a], [b]) => a - b)) {
+    group.sort((a, b) => (departmentOrder.get(a.department) ?? 0) - (departmentOrder.get(b.department) ?? 0)
+      || ROLE_LEVEL[a.role] - ROLE_LEVEL[b.role] || a.name.localeCompare(b.name, "ru"));
+    for (let offset = 0; offset < group.length; offset += PER_ROW) {
+      const line = group.slice(offset, offset + PER_ROW);
+      const xOffset = (cardsWidth - (CARD.width + (line.length - 1) * COLUMN_STEP)) / 2;
+      line.forEach((contact, column) => nodes.set(contact.id, {
+        x: LEFT + xOffset + CARD.width / 2 + column * COLUMN_STEP,
+        y: TOP + CARD.height / 2 + row * ROW_STEP,
+        row, column, contact,
+      }));
+      row++;
+    }
+  }
 
-  return {
-    columns,
-    nodes,
-    size: {
-      width: LEFT + Math.max(0, columns.length - 1) * COLUMN_STEP + CARD.width + 66,
-      height: TOP + (rowCount - 1) * ROW_STEP + CARD.height + 54,
-    },
-  };
-}
-
-function spread(index: number, count: number, span: number, maxStep: number) {
-  const step = Math.min(maxStep, span / Math.max(1, count - 1));
-  return (index - (count - 1) / 2) * step;
+  return { nodes, size: { width: LEFT + cardsWidth + 90, height: TOP + Math.max(0, row - 1) * ROW_STEP + CARD.height + 36 } };
 }
 
 export function routeEdges(edges: StakeholderEdge[], nodes: Map<string, Node>) {
-  const ports = new Map<string, { id: string; targetY: number }[]>();
-  const routes = edges.flatMap((edge) => {
+  const right = Math.max(0, ...[...nodes.values()].map((node) => node.x)) + CARD.width / 2;
+  return edges.flatMap((edge, index) => {
     const from = nodes.get(edge.fromId);
     const to = nodes.get(edge.toId);
     if (!from || !to || from === to) return [];
-    const sameColumn = from.column === to.column;
-    const direction = from.column < to.column || sameColumn ? 1 : -1;
-    const fromPort = `${from.contact.id}:${direction}`;
-    const toPort = `${to.contact.id}:${sameColumn ? direction : -direction}`;
-    for (const [port, targetY] of [[fromPort, to.y], [toPort, from.y]] as const) {
-      const connections = ports.get(port) ?? [];
-      connections.push({ id: edge.id, targetY });
-      ports.set(port, connections);
-    }
-    return [{ edge, from, to, sameColumn, direction, fromPort, toPort }];
-  });
-  for (const connections of ports.values()) connections.sort((a, b) => a.targetY - b.targetY);
-
-  const portY = (node: Node, port: string, edgeId: string) => {
-    const connections = ports.get(port) ?? [];
-    const index = connections.findIndex(({ id }) => id === edgeId);
-    return node.y + spread(index, connections.length, 52, 14);
-  };
-
-  return routes.map(({ edge, from, to, sameColumn, direction, fromPort, toPort }, index) => {
-    const startX = from.x + direction * CARD.width / 2;
-    const endX = to.x + (sameColumn ? direction : -direction) * CARD.width / 2;
-    const startY = portY(from, fromPort, edge.id);
-    const endY = portY(to, toPort, edge.id);
-    const lane = 26 + (index % 5) * 6;
-    const exitX = startX + direction * (lane + (startY - from.y) * 0.23);
-    const entryX = endX - direction * (lane + (endY - to.y) * 0.23);
-
-    let path: string;
-    if (sameColumn) {
-      path = roundedPath([{ x: startX, y: startY }, { x: exitX, y: startY }, { x: exitX, y: endY }, { x: endX, y: endY }]);
-    } else if (Math.abs(from.column - to.column) === 1) {
-      path = `M ${startX} ${startY} C ${exitX} ${startY} ${entryX} ${endY} ${endX} ${endY}`;
+    const direction = from.row < to.row ? 1 : -1;
+    const port = (index % 7 - 3) * 9;
+    const lane = 16 + (index % 6) * 6;
+    const x1 = from.x + port;
+    const x2 = to.x + port;
+    const y1 = from.y + direction * CARD.height / 2;
+    const y2 = to.y - direction * CARD.height / 2;
+    let points: Point[];
+    if (from.row === to.row) {
+      const above = from.y - CARD.height / 2;
+      points = [{ x: x1, y: above }, { x: x1, y: above - lane }, { x: x2, y: above - lane }, { x: x2, y: above }];
+    } else if (Math.abs(from.row - to.row) === 1) {
+      const gap = (y1 + y2) / 2 + (index % 5 - 2) * 5;
+      points = [{ x: x1, y: y1 }, { x: x1, y: gap }, { x: x2, y: gap }, { x: x2, y: y2 }];
     } else {
-      // Department columns share the row baselines, so a cross-column edge can use a gap between rows.
-      const laneRow = Math.floor((from.row + to.row) / 2);
-      const laneY = TOP + (laneRow + 1) * ROW_STEP - 44 + (index % 6) * 7;
-      path = roundedPath([
-        { x: startX, y: startY }, { x: exitX, y: startY }, { x: exitX, y: laneY },
-        { x: entryX, y: laneY }, { x: entryX, y: endY }, { x: endX, y: endY },
-      ]);
+      const start = y1 + direction * lane;
+      const end = y2 - direction * lane;
+      const gutter = right + lane;
+      points = [{ x: x1, y: y1 }, { x: x1, y: start }, { x: gutter, y: start }, { x: gutter, y: end },
+        { x: x2, y: end }, { x: x2, y: y2 }];
     }
-    return { edge, from, to, path };
+    return [{ edge, from, to, path: roundedPath(points) }];
   });
 }
 

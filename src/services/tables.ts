@@ -35,6 +35,7 @@ type ApiTable = {
   name: string;
   description: string | null;
   object_type: string;
+  relationship_source_id?: string | null;
   created_at: string;
   updated_at: string;
   row_count: number;
@@ -134,6 +135,7 @@ function mapColumn(column: ApiColumn): ColumnDefinition {
     type: mapColumnType(column.type),
     width: DEFAULT_WIDTH,
     config: mapColumnConfig(column.type, column.config ?? {}),
+    analysisOutput: typeof column.config?.relationship_output === "string",
   };
 }
 
@@ -143,6 +145,7 @@ function mapTable(table: ApiTable, columns: ColumnDefinition[] = []): DataTable 
     name: table.name,
     type: mapTableType(table.object_type),
     description: table.description ?? undefined,
+    relationshipSourceId: table.relationship_source_id ?? undefined,
     columns,
     views: [ALL_VIEW],
     defaultViewId: "all",

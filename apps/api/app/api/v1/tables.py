@@ -35,6 +35,7 @@ def _table_read(table, column_count: int, row_count: int, columns=None) -> Table
         name=table.name,
         description=table.description,
         object_type=table.object_type,
+        relationship_source_id=table.relationship_source_id,
         created_at=table.created_at,
         updated_at=table.updated_at,
         column_count=column_count,
@@ -225,6 +226,16 @@ async def bulk_delete_rows(
 ) -> Response:
     await RowService(session).bulk_delete(table_id, user, body.row_ids)
     return Response(status_code=204)
+
+
+@router.get("/tables/{table_id}/rows/{row_id}", response_model=RowRead, summary="Get source row")
+async def get_row(
+    table_id: uuid.UUID,
+    row_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+) -> RowRead:
+    return await RowService(session).get(table_id, row_id, user)
 
 
 @router.patch("/tables/{table_id}/rows/{row_id}", response_model=RowRead, summary="Patch row cells")

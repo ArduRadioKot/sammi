@@ -46,7 +46,7 @@ from app.providers.enrichment.types import (
 )
 from app.repositories.enrichment import CellProvenanceRepository, EnrichmentAttemptRepository, EnrichmentRunRepository
 from app.services.credit import CreditService
-from app.services.table import ColumnService, TableAccess, require_write, validate_column_type
+from app.services.table import ColumnService, TableAccess, require_table_write, validate_column_type
 
 logger = get_logger("app.enrichment")
 
@@ -127,7 +127,7 @@ class EnrichmentService:
         output_field: str,
     ) -> TableColumn:
         table, member = await self.access.table_for_user(table_id, user)
-        require_write(member)
+        require_table_write(table, member)
         columns = await self.access.columns.list_for_table(table.id)
         config = self._validated_config(
             table,
@@ -176,7 +176,7 @@ class EnrichmentService:
         idempotency_key: str | None,
     ) -> EnrichmentRun:
         table, member = await self.access.table_for_user(table_id, user)
-        require_write(member)
+        require_table_write(table, member)
         if idempotency_key:
             existing = await self.runs.get_by_idempotency(table.workspace_id, idempotency_key)
             if existing is not None:

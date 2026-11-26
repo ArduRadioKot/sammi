@@ -14,6 +14,8 @@ from app.models.user import User, utc_now
 from app.models.workspace import WorkspaceMember, WorkspaceRole
 from app.repositories.table import TableColumnRepository, TableRepository, TableRowRepository
 from app.repositories.workspace import WorkspaceMemberRepository
+from app.schemas.table import RowRead
+from app.schemas.relationship import OUTPUT_CONFIG_KEY
 from app.services.workspace import WorkspaceService
 
 logger = get_logger("app.tables")
@@ -53,6 +55,12 @@ def _workspace_write_denied() -> AppError:
 def require_write(member: WorkspaceMember) -> None:
     if member.role not in WRITE_ROLES:
         raise _write_denied()
+
+
+def require_table_write(table: WorkspaceTable, member: WorkspaceMember) -> None:
+    require_write(member)
+    if table.relationship_source_id is not None:
+        raise AppError("RELATIONSHIP_DATASET_READ_ONLY", "Редактируйте данные в исходной таблице анализа.", 409)
 
 
 def require_delete_table(member: WorkspaceMember) -> None:
@@ -209,12 +217,13 @@ class TableService:
 
     async def update(self, table_id: uuid.UUID, user: User, *, name: str | None, description: str | None) -> WorkspaceTable:
         table, member = await self.access.table_for_user(table_id, user)
-        require_write(member)
+        require_table_write(table, member)
         return await self.tables.update(table, name=name.strip() if name is not None else None, description=description)
 
     async def delete(self, table_id: uuid.UUID, user: User) -> None:
         table, member = await self.access.table_for_user(table_id, user)
         require_delete_table(member)
+        require_table_write(table, member)
         logger.info("table deleted table_id=%s workspace_id=%s user_id=%s", table.id, table.workspace_id, user.id)
         await self.tables.delete(table)
 
@@ -229,10 +238,12 @@ class ColumnService:
 
     async def create(self, table_id: uuid.UUID, user: User, *, name: str, type: str, config: dict[str, Any]) -> TableColumn:
         table, member = await self.access.table_for_user(table_id, user)
-        require_write(member)
+        require_table_write(table, member)
         column_type = validate_column_type(type)
         if not isinstance(config, dict):
             raise AppError("INVALID_REQUEST", "config must be an object", status_code=400)
+        if OUTPUT_CONFIG_KEY in config:
+            raise AppError("INVALID_REQUEST", "Используйте публикацию отчёта для создания столбцов анализа.", 400)
         if column_type == "enrichment":
             from app.services.enrichment import EnrichmentService
 
@@ -259,12 +270,16 @@ class ColumnService:
         config: dict[str, Any] | None,
     ) -> TableColumn:
         table, member = await self.access.table_for_user(table_id, user)
-        require_write(member)
+        require_table_write(table, member)
         column = await self.access.columns.get_by_id(column_id)
         if column is None or column.table_id != table.id:
             raise _column_not_found()
         if config is not None and not isinstance(config, dict):
             raise AppError("INVALID_REQUEST", "config must be an object", status_code=400)
+        if config is not None:
+            config = {key: value for key, value in config.items() if key != OUTPUT_CONFIG_KEY}
+            if OUTPUT_CONFIG_KEY in column.config:
+                config[OUTPUT_CONFIG_KEY] = column.config[OUTPUT_CONFIG_KEY]
         updated = await self.access.columns.update(
             column,
             name=name.strip() if name is not None else None,
@@ -275,7 +290,7 @@ class ColumnService:
 
     async def delete(self, table_id: uuid.UUID, column_id: uuid.UUID, user: User) -> None:
         table, member = await self.access.table_for_user(table_id, user)
-        require_write(member)
+        require_table_write(table, member)
         column = await self.access.columns.get_by_id(column_id)
         if column is None or column.table_id != table.id:
             raise _column_not_found()
@@ -285,7 +300,7 @@ class ColumnService:
 
     async def reorder(self, table_id: uuid.UUID, user: User, column_ids: list[uuid.UUID]) -> list[TableColumn]:
         table, member = await self.access.table_for_user(table_id, user)
-        require_write(member)
+        require_table_write(table, member)
         existing = await self.access.columns.list_for_table(table.id)
         existing_ids = {column.id for column in existing}
         if len(column_ids) != len(set(column_ids)):
@@ -318,9 +333,17 @@ class RowService:
             row.data = public_row_data(columns, row.data)
         return rows, total, columns
 
+    async def get(self, table_id: uuid.UUID, row_id: uuid.UUID, user: User) -> RowRead:
+        table, _member = await self.access.table_for_user(table_id, user)
+        row = await self.access.rows.get_by_id(row_id)
+        if row is None or row.table_id != table.id:
+            raise _row_not_found()
+        columns = await self.access.columns.list_for_table(table.id)
+        return RowRead.model_validate(row).model_copy(update={"data": public_row_data(columns, row.data)})
+
     async def create(self, table_id: uuid.UUID, user: User, data: dict[str, Any]) -> TableRow:
         table, member = await self.access.table_for_user(table_id, user)
-        require_write(member)
+        require_table_write(table, member)
         columns = await self.access.columns.list_for_table(table.id)
         cleaned = validate_row_data(columns, data or {})
         position = await self.access.rows.max_position(table.id) + 1
@@ -331,7 +354,7 @@ class RowService:
 
     async def update(self, table_id: uuid.UUID, row_id: uuid.UUID, user: User, patch: dict[str, Any]) -> TableRow:
         table, member = await self.access.table_for_user(table_id, user)
-        require_write(member)
+        require_table_write(table, member)
         row = await self.access.rows.get_by_id(row_id)
         if row is None or row.table_id != table.id:
             raise _row_not_found()
@@ -352,7 +375,7 @@ class RowService:
 
     async def delete(self, table_id: uuid.UUID, row_id: uuid.UUID, user: User) -> None:
         table, member = await self.access.table_for_user(table_id, user)
-        require_write(member)
+        require_table_write(table, member)
         row = await self.access.rows.get_by_id(row_id)
         if row is None or row.table_id != table.id:
             raise _row_not_found()
@@ -361,7 +384,7 @@ class RowService:
 
     async def bulk_delete(self, table_id: uuid.UUID, user: User, row_ids: list[uuid.UUID]) -> int:
         table, member = await self.access.table_for_user(table_id, user)
-        require_write(member)
+        require_table_write(table, member)
         unique_ids = list(dict.fromkeys(row_ids))
         deleted = await self.access.rows.delete_many(table.id, unique_ids)
         if deleted != len(unique_ids):

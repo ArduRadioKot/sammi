@@ -134,49 +134,51 @@ export default function TablesPage() {
               <Link to={`/app/tables/${table.id}`} className="truncate hover:underline">
                 {table.name}
               </Link>
-              <span className="text-ink-muted">{table.type}</span>
+              <span className="text-ink-muted">{table.relationshipSourceId ? "Анализ" : table.type}</span>
               <span>{formatNumber(table.rowCount)}</span>
               <span className="text-ink-muted">
                 {formatDistanceToNow(new Date(table.updatedAt), { addSuffix: true, locale: ruLocale })}
               </span>
-              <DropdownMenu>
-                <DropdownMenuTrigger className="flex size-8 items-center justify-center">
-                  <MoreHorizontal className="size-4" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuItem
-                    onSelect={async () => {
-                      const next = window.prompt("Название таблицы", table.name);
-                      if (!next || next === table.name) return;
-                      try {
-                        await tablesService.updateTable(table.id, { name: next });
-                        await reload();
-                      } catch {
-                        toast.error("Не удалось переименовать таблицу");
-                      }
-                    }}
-                  >
-                    Rename
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => toast.message("Duplicate появится позже")}>
-                    Duplicate
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onSelect={async () => {
-                      if (!window.confirm(`Удалить таблицу «${table.name}» вместе с колонками и строками?`)) return;
-                      try {
-                        await tablesService.deleteTable(table.id);
-                        await reload();
-                        toast.success("Удалено");
-                      } catch {
-                        toast.error("Не удалось удалить таблицу");
-                      }
-                    }}
-                  >
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {!table.relationshipSourceId && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger className="flex size-8 items-center justify-center">
+                    <MoreHorizontal className="size-4" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuItem
+                      onSelect={async () => {
+                        const next = window.prompt("Название таблицы", table.name);
+                        if (!next || next === table.name) return;
+                        try {
+                          await tablesService.updateTable(table.id, { name: next });
+                          await reload();
+                        } catch {
+                          toast.error("Не удалось переименовать таблицу");
+                        }
+                      }}
+                    >
+                      Rename
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => toast.message("Duplicate появится позже")}>
+                      Duplicate
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={async () => {
+                        if (!window.confirm(`Удалить таблицу «${table.name}» вместе с колонками и строками?`)) return;
+                        try {
+                          await tablesService.deleteTable(table.id);
+                          await reload();
+                          toast.success("Удалено");
+                        } catch {
+                          toast.error("Не удалось удалить таблицу");
+                        }
+                      }}
+                    >
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
           ))
         )}

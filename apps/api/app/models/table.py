@@ -12,7 +12,10 @@ from app.models.user import utc_now
 
 class WorkspaceTable(Base):
     __tablename__ = "tables"
-    __table_args__ = (Index("ix_tables_workspace_id_updated_at", "workspace_id", "updated_at"),)
+    __table_args__ = (
+        Index("ix_tables_workspace_id_updated_at", "workspace_id", "updated_at"),
+        Index("ix_tables_relationship_dataset", "relationship_source_id", "relationship_entity", unique=True),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     workspace_id: Mapped[uuid.UUID] = mapped_column(
@@ -30,6 +33,10 @@ class WorkspaceTable(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     object_type: Mapped[str] = mapped_column(String(32), nullable=False, default="custom")
+    relationship_source_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("tables.id", name="fk_tables_relationship_source", ondelete="CASCADE"),
+    )
+    relationship_entity: Mapped[str | None] = mapped_column(String(24))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

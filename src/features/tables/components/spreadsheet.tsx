@@ -6,6 +6,7 @@ import {
   Copy,
   EyeOff,
   Filter,
+  IdCard,
   Pencil,
   Play,
   Sparkles,
@@ -220,7 +221,7 @@ export function Spreadsheet({
                     aria-label={`Выбрать ${String(row.cells.company?.value ?? row.id)}`}
                   />
                 </div>
-                {visible.map((column) => (
+                {visible.map((column, columnIndex) => (
                   <div
                     key={column.id}
                     className={cn(
@@ -241,6 +242,13 @@ export function Spreadsheet({
                       if (column.type !== "boolean") setEditingCell({ rowId: row.id, columnId: column.id });
                     }}
                   >
+                    {columnIndex === 0 && (
+                      <button type="button" className="mr-1 flex size-6 shrink-0 items-center justify-center rounded text-ink-muted hover:bg-surface-2 hover:text-ink"
+                        aria-label="Открыть карточку контакта" title="Карточка контакта"
+                        onClick={(event) => { event.stopPropagation(); onOpenCompany(row.id); }}>
+                        <IdCard className="size-3.5" aria-hidden="true" />
+                      </button>
+                    )}
                     {editingCell?.rowId === row.id && editingCell?.columnId === column.id && column.type !== "boolean" ? (
                       <InlineEditor
                         key={`${row.id}:${column.id}:${String(row.cells[column.id]?.value ?? "")}`}
