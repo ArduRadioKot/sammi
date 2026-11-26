@@ -7,7 +7,7 @@ const FILTERS = ["Employees > 100", "Score > 80", "Intent = High"];
 
 export function QualificationStory() {
   return (
-    <PinnedStory steps={2} className="bg-[#06100E] px-5 lg:px-10">
+    <PinnedStory steps={2} className="bg-[#0C0032] px-5 lg:px-10">
       {(step) => (
         <div className="mx-auto w-full max-w-[1440px]">
           <StepItem show={step >= 0}>

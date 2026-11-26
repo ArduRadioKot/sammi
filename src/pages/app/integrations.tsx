@@ -62,7 +62,7 @@ export default function IntegrationsPage() {
                   <div className="text-[13px] font-medium">{item.name}</div>
                   <div className="mt-1 text-[12px] text-ink-muted">{item.description}</div>
                 </div>
-                <Badge tone={item.connected ? "green" : "neutral"}>
+                <Badge tone={item.connected ? "violet" : "neutral"}>
                   {item.connected ? "Connected" : "Not connected"}
                 </Badge>
               </div>

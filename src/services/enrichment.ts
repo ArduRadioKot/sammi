@@ -68,8 +68,8 @@ export type CellProvenance = {
 const prefix = apiConfig.versionPrefix;
 
 export const enrichmentService = {
-  listProviders() {
-    return apiClient.get<{ items: EnrichmentProviderStatus[] }>(`${prefix}/enrichment/providers`);
+  listProviders(signal?: AbortSignal) {
+    return apiClient.get<{ items: EnrichmentProviderStatus[] }>(`${prefix}/enrichment/providers`, signal);
   },
   createColumn(
     tableId: string,

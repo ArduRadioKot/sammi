@@ -5,7 +5,7 @@ import { SectionLabel } from "@/pages/landing/components/GrainField";
 
 export function ProductStage() {
   return (
-    <PinnedStory id="workspace" steps={2} className="bg-[#06100E] px-5 lg:px-10">
+    <PinnedStory id="workspace" steps={2} className="bg-[#0C0032] px-5 lg:px-10">
       {(step) => (
         <div className="mx-auto w-full max-w-[1440px]">
           <StepItem show={step >= 0}>

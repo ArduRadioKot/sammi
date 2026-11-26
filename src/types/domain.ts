@@ -123,7 +123,7 @@ export interface RunCondition {
 export interface SelectOption {
   id: string;
   label: string;
-  color?: "neutral" | "blue" | "green" | "amber" | "red" | "violet";
+  color?: "neutral" | "blue" | "violet" | "amber" | "red";
 }
 
 export interface EnrichmentProvider {
@@ -431,6 +431,5 @@ export type CommandActionId =
   | "add-enrichment"
   | "search-table"
   | "go-integrations"
-  | "create-audience"
-  | "create-signal"
+  | "work-assistant"
   | "settings";

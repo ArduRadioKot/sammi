@@ -35,7 +35,7 @@ const demoColumns: ColumnDefinition[] = [
   { id: "intent", name: "Intent", type: "select", width: 110, config: { kind: "select", options: [
     { id: "low", label: "Low", color: "neutral" },
     { id: "medium", label: "Medium", color: "amber" },
-    { id: "high", label: "High", color: "green" },
+    { id: "high", label: "High", color: "violet" },
   ] } },
   { id: "score", name: "Score", type: "score", width: 100 },
   { id: "crm", name: "CRM", type: "status", width: 120 },

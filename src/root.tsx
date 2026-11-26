@@ -16,13 +16,8 @@ const PeoplePage = lazy(() => import("@/pages/app/people"));
 const CompaniesPage = lazy(() => import("@/pages/app/companies"));
 const StakeholderMapPage = lazy(() => import("@/features/stakeholders/stakeholder-map-page"));
 const MapPage = lazy(() => import("@/pages/app/map"));
-const AudiencesPage = lazy(() => import("@/pages/app/audiences"));
-const SignalsPage = lazy(() => import("@/pages/app/signals"));
 const AgentsPage = lazy(() => import("@/pages/app/agents"));
-const CampaignsPage = lazy(() => import("@/pages/app/campaigns"));
-const CampaignDetailsPage = lazy(() => import("@/pages/app/campaign-details"));
 const IntegrationsPage = lazy(() => import("@/pages/app/integrations"));
-const UsagePage = lazy(() => import("@/pages/app/usage"));
 const SettingsPage = lazy(() => import("@/pages/app/settings"));
 
 function PageFallback() {
@@ -160,42 +155,10 @@ function AppRoutes() {
             }
           />
           <Route
-            path="audiences"
-            element={
-              <LazyPage>
-                <AudiencesPage />
-              </LazyPage>
-            }
-          />
-          <Route
-            path="signals"
-            element={
-              <LazyPage>
-                <SignalsPage />
-              </LazyPage>
-            }
-          />
-          <Route
             path="agents"
             element={
               <LazyPage>
                 <AgentsPage />
-              </LazyPage>
-            }
-          />
-          <Route
-            path="campaigns"
-            element={
-              <LazyPage>
-                <CampaignsPage />
-              </LazyPage>
-            }
-          />
-          <Route
-            path="campaigns/:id"
-            element={
-              <LazyPage>
-                <CampaignDetailsPage />
               </LazyPage>
             }
           />
@@ -207,14 +170,10 @@ function AppRoutes() {
               </LazyPage>
             }
           />
-          <Route
-            path="usage"
-            element={
-              <LazyPage>
-                <UsagePage />
-              </LazyPage>
-            }
-          />
+          <Route path="audiences" element={<Navigate to="/app" replace />} />
+          <Route path="signals" element={<Navigate to="/app" replace />} />
+          <Route path="campaigns/*" element={<Navigate to="/app" replace />} />
+          <Route path="usage" element={<Navigate to="/app" replace />} />
           <Route
             path="settings"
             element={

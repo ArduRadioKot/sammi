@@ -4,7 +4,7 @@ const LINES = ["Один рынок.", "Сотни источников.", "Од
 
 export function QuietThesis() {
   return (
-    <PinnedStory steps={3} className="bg-[#06100E] px-5 lg:px-10">
+    <PinnedStory steps={3} className="bg-[#0C0032] px-5 lg:px-10">
       {(step) => (
         <div className="mx-auto w-full max-w-[920px]">
           <StepItem show={step >= 0}>

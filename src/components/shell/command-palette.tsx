@@ -18,8 +18,7 @@ const ACTIONS: Array<{ id: CommandActionId; label: string; hint?: string }> = [
   { id: "add-enrichment", label: "Добавить enrichment" },
   { id: "search-table", label: "Найти в таблице" },
   { id: "go-integrations", label: "Открыть интеграции" },
-  { id: "create-audience", label: "Создать аудиторию" },
-  { id: "create-signal", label: "Создать сигнал" },
+  { id: "work-assistant", label: "Открыть ИИ-помощника" },
   { id: "settings", label: "Настройки" },
 ];
 
@@ -42,9 +41,8 @@ export function CommandPalette() {
 
   const runAction = (id: CommandActionId) => {
     if (id === "go-integrations") navigate("/app/integrations");
+    else if (id === "work-assistant") navigate("/app/agents");
     else if (id === "settings") navigate("/app/settings");
-    else if (id === "create-audience") navigate("/app/audiences");
-    else if (id === "create-signal") navigate("/app/signals");
     else if (id === "create-table") navigate("/app/tables");
     else if (id === "add-enrichment" || id === "import" || id === "search-table") {
       navigate("/app/tables");

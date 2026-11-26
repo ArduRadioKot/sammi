@@ -13,7 +13,7 @@ const STREAM = [
 
 export function SignalsStory() {
   return (
-    <PinnedStory steps={4} className="bg-[#06100E] px-5 lg:px-10">
+    <PinnedStory steps={4} className="bg-[#0C0032] px-5 lg:px-10">
       {(step) => (
         <div className="mx-auto grid w-full max-w-[1440px] gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
           <div>
@@ -30,7 +30,7 @@ export function SignalsStory() {
                 step >= 1 + Math.floor(index / 2) ? (
                   <StepItem key={item} show>
                     <div className="flex items-center gap-3 border-b border-line py-3 text-[14px]">
-                      <span className="size-1.5 rounded-full bg-[#CDEFB2]" />
+                      <span className="size-1.5 rounded-full bg-[#967CFF]" />
                       <span>{item}</span>
                     </div>
                   </StepItem>

@@ -46,12 +46,15 @@ export function LoginPage() {
     try {
       await navigator.clipboard.writeText(demoEmail);
     } catch {
-      const input = document.getElementById("email");
-      if (input instanceof HTMLInputElement) {
-        input.focus();
-        input.select();
-        document.execCommand("copy");
-      }
+      const fallback = document.createElement("textarea");
+      fallback.value = demoEmail;
+      fallback.setAttribute("readonly", "");
+      fallback.style.position = "fixed";
+      fallback.style.opacity = "0";
+      document.body.append(fallback);
+      fallback.select();
+      document.execCommand("copy");
+      fallback.remove();
     }
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
@@ -73,7 +76,7 @@ export function LoginPage() {
     <div className="min-h-svh lg:grid lg:grid-cols-[minmax(0,0.55fr)_minmax(0,0.45fr)]">
       <DocumentHead title="Вход" path="/login" noIndex description="Войти в платформу." />
       <aside className="landing relative hidden min-h-svh overflow-hidden lg:block">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_18%,rgba(99,190,175,.28),transparent_34%),radial-gradient(circle_at_22%_78%,rgba(28,92,78,.32),transparent_42%),linear-gradient(145deg,#07100E_0%,#0A211C_55%,#163F36_100%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_18%,rgba(150,124,255,.30),transparent_34%),radial-gradient(circle_at_22%_78%,rgba(53,0,211,.34),transparent_42%),linear-gradient(145deg,#0C0032_0%,#190061_55%,#240090_100%)]" />
         <div className="landing-grain absolute inset-0" />
         <div className="relative flex h-full flex-col justify-between p-10">
           <Link to="/" className="flex items-center gap-2 text-[13px]">

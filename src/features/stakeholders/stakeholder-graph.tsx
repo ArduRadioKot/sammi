@@ -130,7 +130,7 @@ export function StakeholderGraph({ accountName, contacts, totalContacts, edges, 
                     className="stakeholder-node"
                     data-role={contact.role}
                     data-related={connected.has(contact.id)}
-                    aria-label={`${contact.name}, ${roleNames[contact.role]}, ${stanceNames[contact.stance]}${publications ? `, публичных событий ${publications}` : ""}`}
+                    aria-label={`${contact.name}${contact.title ? `, ${contact.title}` : ""}, ${stanceNames[contact.stance]}${publications ? `, публичных событий ${publications}` : ""}`}
                     aria-pressed={contact.id === selectedId}
                     onFocus={(event) => { if (event.currentTarget.matches(":focus-visible")) reveal(node); }}
                     onClick={() => { setPopupId(contact.id); onSelect(contact.id); }}
@@ -139,7 +139,7 @@ export function StakeholderGraph({ accountName, contacts, totalContacts, edges, 
                     <span className="stakeholder-node-avatar" aria-hidden="true">{initials(contact.name)}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[14px] font-semibold">{contact.name}</span>
-                      <span className="mt-0.5 block truncate text-[11px] text-ink-muted">{roleNames[contact.role]} · {contact.influence ? `${contact.influence}/5` : "влияние не оценено"}</span>
+                      <span className="mt-0.5 block truncate text-[11px] text-ink-muted">{contact.title || "Должность не указана"}</span>
                       <span className="block truncate text-[10px] text-ink-muted">{contact.department}</span>
                       {contact.lastMeetingAt && <span className="block truncate text-[10px] text-ink-muted">Встреча · {dateLabel(contact.lastMeetingAt)}</span>}
                     </span>

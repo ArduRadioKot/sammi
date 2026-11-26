@@ -51,12 +51,13 @@ function FindingList({ title, findings, onSource }: { title: string; findings: F
 }
 
 export function ReportView({
-  run, report, contactId, onContact, onSource, onReview, onApproveRelationship, canApprove, mode = "extended",
+  run, report, contactId, onContact, onOpenContact, onSource, onReview, onApproveRelationship, canApprove, mode = "extended",
 }: {
   run: AnalysisRun;
   report: AnalysisReport;
   contactId: string;
   onContact: (id: string) => void;
+  onOpenContact?: (id: string) => void;
   onSource: (id: string) => void;
   onReview: (item: ReviewItem) => void;
   onApproveRelationship: (proposalId: string) => void;
@@ -97,6 +98,10 @@ export function ReportView({
   }, [report, run.id, run.created_at]);
 
   const selectOnMap = (id: string) => {
+    if (onOpenContact) {
+      onOpenContact(id);
+      return;
+    }
     onContact(id);
     const profile = profileRef.current;
     if (!profile) return;
@@ -360,7 +365,7 @@ export function ReportView({
                   )}
                   {item.reason && <p className="mt-0.5 text-xs text-ink-muted">{item.reason}</p>}
                 </div>
-                <Badge tone={item.state === "included" ? "green" : item.state === "pending" ? "neutral" : "amber"}>
+                <Badge tone={item.state === "included" ? "violet" : item.state === "pending" ? "neutral" : "amber"}>
                   {publicationStates[item.state]}
                 </Badge>
               </li>
@@ -402,7 +407,7 @@ export function ReportView({
                     <p className="mt-1 text-xs text-ink-muted">{item.reason} Уверенность · {percentage(item.confidence)}</p>
                     {item.decision && (
                       <div className="mt-2 space-y-1 text-xs">
-                        <Badge tone={item.decision.action === "confirmed" ? "green" : "neutral"}>
+                        <Badge tone={item.decision.action === "confirmed" ? "violet" : "neutral"}>
                           {item.decision.action === "confirmed" ? "Подтверждена" : "Отклонена"}
                         </Badge>
                         {item.decision.contact_name && <span className="ml-2">{item.decision.contact_name}</span>}

@@ -1,16 +1,12 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
-  Activity,
   Bot,
   Building2,
-  CreditCard,
   House,
   Map,
   Menu,
   PanelLeft,
   Plug,
-  Radio,
-  Send,
   Settings,
   Table2,
   Users,
@@ -48,21 +44,12 @@ const NAV = [
   {
     section: ru.nav.intelligence,
     items: [
-      { href: "/app/audiences", label: ru.nav.audiences, icon: Radio },
-      { href: "/app/signals", label: ru.nav.signals, icon: Activity },
       { href: "/app/agents", label: ru.nav.agents, icon: Bot },
     ],
   },
   {
-    section: ru.nav.activation,
-    items: [{ href: "/app/campaigns", label: ru.nav.campaigns, icon: Send }],
-  },
-  {
     section: ru.nav.platform,
-    items: [
-      { href: "/app/integrations", label: ru.nav.integrations, icon: Plug },
-      { href: "/app/usage", label: ru.nav.usage, icon: CreditCard },
-    ],
+    items: [{ href: "/app/integrations", label: ru.nav.integrations, icon: Plug }],
   },
 ] as const;
 
@@ -95,7 +82,7 @@ function NavLink({
       {active && (
         <span
           aria-hidden
-          className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-[var(--green-400)]"
+          className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-[var(--violet-700)]"
         />
       )}
       <Icon className="size-4 shrink-0" />

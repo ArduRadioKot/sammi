@@ -16,9 +16,9 @@ const buttonVariants = cva(
         accent:
           "bg-accent text-accent-foreground hover:-translate-y-px active:translate-y-0",
         ivory:
-          "rounded-full bg-[#F7F3E8] text-[#0A0D0B] hover:-translate-y-px",
+          "rounded-full bg-[#F6F5F8] text-[#0C0032] hover:-translate-y-px",
         outline:
-          "rounded-full border border-[rgba(247,243,232,0.28)] bg-transparent text-[#F7F3E8] hover:border-[rgba(247,243,232,0.5)]",
+          "rounded-full border border-[rgba(246,245,248,0.28)] bg-transparent text-[#F6F5F8] hover:border-[rgba(246,245,248,0.5)]",
         danger: "bg-danger text-white hover:opacity-90",
       },
       size: {

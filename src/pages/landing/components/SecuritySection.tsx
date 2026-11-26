@@ -16,7 +16,7 @@ const ROADMAP = [
 
 export function SecuritySection() {
   return (
-    <PinnedStory steps={4} className="bg-[#06100E] px-5 lg:px-10">
+    <PinnedStory steps={4} className="bg-[#0C0032] px-5 lg:px-10">
       {(step) => (
         <div className="mx-auto w-full max-w-[920px]">
           <StepItem show={step >= 0}>
@@ -30,7 +30,7 @@ export function SecuritySection() {
           <div className="mt-14 grid gap-10 md:grid-cols-2">
             <div>
               <StepItem show={step >= 1}>
-                <div className="ds-label text-[#CDEFB2]">Available</div>
+                <div className="ds-label text-[#967CFF]">Available</div>
               </StepItem>
               <div className="mt-4 divide-y divide-line border-y border-line">
                 {AVAILABLE.map((item, index) => (

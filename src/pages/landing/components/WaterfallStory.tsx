@@ -13,7 +13,7 @@ const NODES = [
 
 export function WaterfallStory() {
   return (
-    <PinnedStory steps={4} className="bg-[#06100E] px-5 lg:px-10">
+    <PinnedStory steps={4} className="bg-[#0C0032] px-5 lg:px-10">
       {(step) => (
         <div className="mx-auto grid w-full max-w-[1440px] gap-10 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
           <div>
@@ -39,7 +39,7 @@ export function WaterfallStory() {
                   const found = node.status === "found" || node.status === "verified";
                   return (
                     <g key={node.name} opacity={active ? 1 : 0.28}>
-                      <circle cx="140" cy={y} r="4" fill={found && active ? "#CDEFB2" : "currentColor"} />
+                      <circle cx="140" cy={y} r="4" fill={found && active ? "#967CFF" : "currentColor"} />
                       <text x="158" y={y + 4} fontSize="11" fill="currentColor">
                         {node.name}
                       </text>

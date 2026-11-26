@@ -48,7 +48,7 @@ export function MarketingPage({ slug }: { slug: keyof typeof PAGES }) {
         <p className="mt-6 max-w-xl text-[16px] text-ink-muted">{page.body}</p>
         <Link
           to="/login"
-          className="mt-8 inline-flex h-12 min-h-12 items-center rounded-full bg-[var(--green-300)] px-6 text-[16px] font-medium text-[#0d120e] transition-transform duration-[var(--motion-ui)] hover:-translate-y-px"
+          className="mt-8 inline-flex h-12 min-h-12 items-center rounded-full bg-[var(--violet-200)] px-6 text-[16px] font-medium text-[#0c0032] transition-transform duration-[var(--motion-ui)] hover:-translate-y-px"
         >
           Начать бесплатно
         </Link>

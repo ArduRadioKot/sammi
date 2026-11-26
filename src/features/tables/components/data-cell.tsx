@@ -159,7 +159,7 @@ export const DataCell = memo(function DataCell({
   }
 
   if (column.type === "select") {
-    const tone = text === "High" ? "green" : text === "Medium" ? "amber" : "neutral";
+    const tone = text === "High" ? "violet" : text === "Medium" ? "amber" : "neutral";
     return text ? <Badge tone={tone}>{text}</Badge> : null;
   }
 

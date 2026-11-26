@@ -8,7 +8,7 @@ const DESTINATIONS = ["amoCRM", "Bitrix24", "Telegram", "Webhook"];
 
 export function ActivationStory() {
   return (
-    <PinnedStory steps={3} className="bg-[#06100E] px-5 lg:px-10">
+    <PinnedStory steps={3} className="bg-[#0C0032] px-5 lg:px-10">
       {(step) => (
         <div className="mx-auto grid w-full max-w-[1440px] gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
           <div>
@@ -28,7 +28,7 @@ export function ActivationStory() {
             <StepItem show={step >= 1}>
               <svg viewBox="0 0 360 220" className="mt-8 w-full max-w-md text-[rgba(247,245,239,0.6)]">
                 <DrawLine d="M80 110 H280" active={step >= 1} />
-                <circle cx="80" cy="110" r="5" fill="#CDEFB2" />
+                <circle cx="80" cy="110" r="5" fill="#967CFF" />
                 <text x="24" y="96" fontSize="11" fill="currentColor">
                   Qualified record
                 </text>

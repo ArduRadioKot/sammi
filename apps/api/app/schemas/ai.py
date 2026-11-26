@@ -51,3 +51,19 @@ class AIProviderTestResponse(BaseModel):
     model: str
     status: str
     duration_ms: int | None = None
+
+
+class AIChatMessage(BaseModel):
+    role: str
+    content: str = Field(min_length=1, max_length=6000)
+
+
+class AIChatRequest(BaseModel):
+    messages: list[AIChatMessage] = Field(min_length=1, max_length=20)
+    model: str | None = Field(default=None, max_length=200)
+
+
+class AIChatResponse(BaseModel):
+    content: str
+    model: str
+    duration_ms: int | None = None

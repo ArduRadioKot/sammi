@@ -95,7 +95,7 @@
 .route-silk {
   background:
     linear-gradient(180deg, var(--brand-void), transparent 10% 82%, var(--brand-void)),
-    radial-gradient(ellipse at 68% 36%, #244f39 13%, #153325 40%, var(--brand-void) 71%);
+    radial-gradient(ellipse at 68% 36%, #240090 13%, #190061 40%, var(--brand-void) 71%);
 }
 
 .route-hero-copy {
@@ -152,7 +152,7 @@
 }
 
 .route-button:hover {
-  background: var(--green-100);
+  background: var(--violet-100);
   transform: translateY(-2px);
 }
 
@@ -312,7 +312,7 @@
 }
 
 .route-lightbox::backdrop {
-  background: rgb(5 7 5 / 86%);
+  background: rgb(12 0 50 / 86%);
 }
 
 .route-lightbox-bar {
@@ -424,7 +424,7 @@
 }
 
 .route-workflow {
-  background: var(--green-200);
+  background: var(--violet-200);
   color: var(--ink-100);
 }
 
@@ -507,7 +507,7 @@
   }
 
   .route-story-step[data-active="true"] .route-story-step-copy {
-    background: var(--green-100);
+    background: var(--violet-100);
   }
 
   .route-story-inline {
@@ -521,7 +521,7 @@
     min-width: 0;
     padding: clamp(12px, 1.7vw, 24px);
     border-radius: var(--route-radius);
-    background: var(--green-100);
+    background: var(--violet-100);
   }
 
   .route-story-screen .route-shot-link img {
@@ -547,14 +547,14 @@
     margin-top: 12px;
     overflow: hidden;
     border-radius: var(--route-radius);
-    background: var(--green-200);
+    background: var(--violet-200);
   }
 
   .route-story-progress > div {
     height: 100%;
     transform-origin: left;
     border-radius: var(--route-radius);
-    background: var(--green-600);
+    background: var(--violet-700);
   }
 }
 

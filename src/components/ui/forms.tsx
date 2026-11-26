@@ -69,13 +69,12 @@ export function Badge({
   className,
 }: {
   children: React.ReactNode;
-  tone?: "neutral" | "blue" | "green" | "amber" | "red" | "violet";
+  tone?: "neutral" | "blue" | "violet" | "amber" | "red";
   className?: string;
 }) {
   const tones: Record<string, string> = {
     neutral: "bg-surface-1 text-ink-muted",
     blue: "bg-accent-soft text-accent",
-    green: "bg-success-soft text-success",
     amber: "bg-warning-soft text-warning",
     red: "bg-danger-soft text-danger",
     violet: "bg-accent-soft text-accent",

@@ -14,7 +14,7 @@ const MARKS = [
 
 export function CinematicField() {
   return (
-    <PinnedStory steps={4} className="relative overflow-hidden bg-[#06100E] px-5 lg:px-10">
+    <PinnedStory steps={4} className="relative overflow-hidden bg-[#0C0032] px-5 lg:px-10">
       {(step) => (
         <>
           <GrainField />

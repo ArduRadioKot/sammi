@@ -19,7 +19,7 @@ export function AppLayout() {
         />
       ) : null}
       <AppSidebar />
-      <main className="min-w-0 flex-1 overflow-hidden pt-12 lg:pt-0">
+      <main className="min-h-0 min-w-0 flex-1 overflow-hidden pt-12 lg:pt-0">
         <Outlet />
       </main>
       <CommandPalette />

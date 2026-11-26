@@ -60,7 +60,7 @@ export default function SignalsPage() {
                 {formatDistanceToNow(new Date(item.lastRun), { addSuffix: true, locale: ruLocale })}
               </span>
               <span>{item.newEvents}</span>
-              <Badge tone={item.status === "active" ? "green" : "neutral"}>{item.status}</Badge>
+              <Badge tone={item.status === "active" ? "violet" : "neutral"}>{item.status}</Badge>
             </div>
           ))}
         </div>

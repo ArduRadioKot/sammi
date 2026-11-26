@@ -56,7 +56,7 @@ export default function CampaignsPage() {
               <span>{item.sent}</span>
               <span>{item.replies}</span>
               <span>{item.positive}</span>
-              <Badge tone={item.status === "active" ? "green" : "neutral"}>{item.status}</Badge>
+              <Badge tone={item.status === "active" ? "violet" : "neutral"}>{item.status}</Badge>
             </button>
           ))}
         </div>

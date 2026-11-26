@@ -4,17 +4,28 @@ import { companiesService } from "@/services";
 import type { Company } from "@/types/domain";
 import { formatCurrencyRub, formatNumber, initials } from "@/lib/utils";
 import { Sheet } from "@/components/ui/dialog";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { stakeholderRepository, type StakeholderAccount } from "@/features/stakeholders/repository";
 import { ENABLE_DEMO_DATA } from "@/lib/constants/config";
+import { relationshipAnalysis, type AnalysisRun } from "@/services/relationship-analysis";
+import { ReportView } from "@/features/relationship/analysis-report";
+import { Button } from "@/components/ui/button";
 
 export default function CompaniesPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const analysisTableId = searchParams.get("analysis") ?? "";
+  const requestedContactId = searchParams.get("contact") ?? "";
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [industry, setIndustry] = useState("all");
   const [selected, setSelected] = useState<Company | null>(null);
   const [demoAccounts, setDemoAccounts] = useState<StakeholderAccount[]>([]);
+  const [analysisResult, setAnalysisResult] = useState<{ tableId: string; run: AnalysisRun | null; error: string }>({ tableId: "", run: null, error: "" });
+  const currentAnalysis = analysisResult.tableId === analysisTableId ? analysisResult : null;
+  const analysisRun = currentAnalysis?.run ?? null;
+  const analysisError = currentAnalysis?.error ?? "";
+  const analysisLoading = Boolean(analysisTableId && !currentAnalysis);
 
   useEffect(() => {
     companiesService.listCompanies().then((items) => {
@@ -23,6 +34,26 @@ export default function CompaniesPage() {
     });
     if (ENABLE_DEMO_DATA) void stakeholderRepository.listAccounts().then(setDemoAccounts);
   }, []);
+
+  useEffect(() => {
+    if (!analysisTableId) return;
+    const controller = new AbortController();
+    void relationshipAnalysis.setup(analysisTableId, controller.signal)
+      .then((setup) => {
+        if (controller.signal.aborted) return;
+        if (!setup.run?.report) throw new Error("Для этой таблицы ещё нет готового анализа.");
+        setAnalysisResult({ tableId: analysisTableId, run: setup.run, error: "" });
+      })
+      .catch((error: unknown) => { if (!controller.signal.aborted) setAnalysisResult({ tableId: analysisTableId, run: null, error: error instanceof Error ? error.message : "Не удалось загрузить карту клиента." }); });
+    return () => controller.abort();
+  }, [analysisTableId]);
+
+  const selectAnalysisContact = (id: string) => {
+    setSearchParams((current) => {
+      current.set("contact", id);
+      return current;
+    }, { replace: true });
+  };
 
   const industries = useMemo(
     () => ["all", ...Array.from(new Set(companies.map((item) => item.industry)))],
@@ -42,7 +73,7 @@ export default function CompaniesPage() {
   );
 
   return (
-    <div className="flex h-full flex-col gap-3 overflow-auto p-5">
+    <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h1 className="text-[22px] font-medium tracking-[-0.03em]">Компании</h1>
@@ -63,6 +94,30 @@ export default function CompaniesPage() {
           <Input className="w-64" placeholder="Поиск" value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
       </div>
+      {analysisTableId && (
+        <section className="shrink-0 space-y-3 rounded-2xl bg-surface-1 p-4 sm:p-5" aria-label="Карта участников клиента">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold tracking-tight">Карта клиента{analysisRun?.report?.company ? ` · ${analysisRun.report.company}` : ""}</h2>
+              <p className="mt-1 max-w-2xl text-sm text-ink-muted">Выберите участника на карте, чтобы открыть его карточку и посмотреть должность, отношения и рекомендации.</p>
+            </div>
+            {analysisRun && <Button asChild size="sm" variant="secondary"><Link to={`/app/tables/${analysisTableId}/relationship-analysis`}>Полный анализ</Link></Button>}
+          </div>
+          {analysisLoading && <Skeleton className="h-72" />}
+          {analysisError && <p role="alert" className="rounded-lg bg-danger-soft p-3 text-sm text-danger">{analysisError}</p>}
+          {analysisRun?.report && <ReportView
+            mode="overview"
+            run={analysisRun}
+            report={analysisRun.report}
+            contactId={requestedContactId}
+            onContact={selectAnalysisContact}
+            onSource={() => {}}
+            onReview={() => {}}
+            onApproveRelationship={() => {}}
+            canApprove={false}
+          />}
+        </section>
+      )}
       {ENABLE_DEMO_DATA && <section className="shrink-0 rounded-[var(--radius-md)] border border-line bg-surface-0 p-3">
         <div className="mb-2 flex items-center justify-between gap-3">
           <div><h2 className="text-[13px] font-medium">Карта ЛПР · демонстрационные клиенты</h2><p className="text-[11px] text-ink-muted">Вымышленные компании. Изменения сохраняются локально в браузере.</p></div>

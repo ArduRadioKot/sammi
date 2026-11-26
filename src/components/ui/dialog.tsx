@@ -78,7 +78,7 @@ export function Sheet({
               <X className="size-4" />
             </DialogPrimitive.Close>
           </div>
-          <div className="flex-1 overflow-auto p-4">{children}</div>
+          <div className="min-h-0 flex-1 overflow-auto p-4">{children}</div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

@@ -10,17 +10,16 @@ import { checkAIProvider, listAIProviderModels, listAIProviders, testAIProvider,
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUiStore } from "@/stores/ui-store";
+import { enrichmentService, type EnrichmentProviderStatus } from "@/services/enrichment";
 
 const SECTIONS = [
-  "System",
-  "Workspace",
-  "Members",
-  "Billing",
-  "AI Providers",
-  "Data Providers",
-  "Security",
-  "API",
-  "Appearance",
+  "Система",
+  "Рабочее пространство",
+  "Участники",
+  "ИИ-модель",
+  "Источники данных",
+  "Безопасность",
+  "Внешний вид",
 ] as const;
 
 type ConnectionState = "checking" | "connected" | "degraded" | "disconnected";
@@ -68,8 +67,8 @@ function SystemStatus() {
 
   return (
     <div className="max-w-lg">
-      <h1 className="text-[18px] font-medium">System</h1>
-      <p className="mt-1 text-[13px] text-ink-muted">Статус backend, PostgreSQL и сессии.</p>
+      <h1 className="text-[18px] font-medium">Система</h1>
+      <p className="mt-1 text-[13px] text-ink-muted">Подключение к приложению и базе данных.</p>
       <div className="mt-4">
         <StatusRow label="Backend" state={backend} />
         <StatusRow label="PostgreSQL" state={database} />
@@ -165,16 +164,16 @@ function AIProvidersStatus() {
 
   return (
     <div className="max-w-xl space-y-4">
-      <h1 className="text-[18px] font-medium">AI Providers</h1>
-      <p className="text-[13px] text-ink-muted">Secrets задаются в backend `.env`. Ключи в UI не передаются. Frontend не ходит в Ollama напрямую.</p>
+      <h1 className="text-[18px] font-medium">ИИ-модель</h1>
+      <p className="text-[13px] text-ink-muted">Генерация проходит на сервере через локальную Ollama. Секреты провайдеров хранятся только в backend.</p>
       {(items ?? []).map((item) => (
         <section key={item.id} className="rounded-[var(--radius-md)] border border-line p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="text-[13px] font-medium">{PROVIDER_LABELS[item.id] ?? item.id}</div>
             <span className="text-right text-[12px] text-ink-muted">
-              {item.configured ? "Configured via environment" : "Not configured"}
+              {item.configured ? "Настроен" : "Не настроен"}
               {" · "}
-              {item.available ? "Available" : "Unavailable"}
+              {item.available ? "Доступен" : "Недоступен"}
             </span>
           </div>
           {item.id === "ollama" ? (
@@ -184,11 +183,11 @@ function AIProvidersStatus() {
                 <span className="font-mono text-[12px]">{item.endpoint ?? "—"}</span>
               </div>
               <div className="flex justify-between gap-3 text-ink-muted">
-                <span>Default model</span>
+                <span>Модель по умолчанию</span>
                 <span>{item.default_model || "не задан"}</span>
               </div>
                 <div>
-                <div className="mb-1 text-[12px] text-ink-muted">Installed models</div>
+                <div className="mb-1 text-[12px] text-ink-muted">Установленные модели</div>
                 {installedModels.length > 0 ? (
                 <Select value={selectedModel} onValueChange={setSelectedModel} disabled={!item.available}>
                   <SelectTrigger>
@@ -217,7 +216,7 @@ function AIProvidersStatus() {
               disabled={!item.configured || checking === item.id}
               onClick={() => void test(item.id)}
             >
-              {checking === item.id ? "Checking…" : "Test connection"}
+                {checking === item.id ? "Проверяем…" : "Проверить соединение"}
             </Button>
             {item.capabilities?.generation ? (
               <Button
@@ -225,7 +224,7 @@ function AIProvidersStatus() {
                 disabled={!item.available || installedModels.length === 0 || testing}
                 onClick={() => void testGeneration()}
               >
-                {testing ? "Testing…" : "Test generation"}
+                {testing ? "Проверяем…" : "Проверить генерацию"}
               </Button>
             ) : null}
           </div>
@@ -237,12 +236,22 @@ function AIProvidersStatus() {
 }
 
 export default function SettingsPage() {
-  const [section, setSection] = useState<(typeof SECTIONS)[number]>("System");
+  const [section, setSection] = useState<(typeof SECTIONS)[number]>("Система");
   const { theme, setTheme } = useTheme();
   const reduceTransparency = useUiStore((s) => s.reduceTransparency);
   const setReduceTransparency = useUiStore((s) => s.setReduceTransparency);
   const user = useAuthStore((s) => s.user);
   const workspace = useAuthStore((s) => s.workspace);
+  const [dataProviders, setDataProviders] = useState<EnrichmentProviderStatus[] | null>(null);
+
+  useEffect(() => {
+    if (section !== "Источники данных") return;
+    const controller = new AbortController();
+    enrichmentService.listProviders(controller.signal).then((result) => setDataProviders(result.items)).catch(() => {
+      if (!controller.signal.aborted) setDataProviders([]);
+    });
+    return () => controller.abort();
+  }, [section]);
 
   return (
     <div className="flex h-full">
@@ -261,68 +270,56 @@ export default function SettingsPage() {
         ))}
       </aside>
       <div className="flex-1 overflow-auto p-6">
-        {section === "System" && <SystemStatus />}
-        {section === "Workspace" && (
+        {section === "Система" && <SystemStatus />}
+        {section === "Рабочее пространство" && (
           <div className="max-w-lg space-y-3">
-            <h1 className="text-[18px] font-medium">Workspace</h1>
+            <h1 className="text-[18px] font-medium">Рабочее пространство</h1>
             <Label>Название</Label>
             <Input value={workspace?.name ?? ""} readOnly />
             <Label>Slug</Label>
             <Input value={workspace?.slug ?? ""} readOnly />
           </div>
         )}
-        {section === "Members" && (
+        {section === "Участники" && (
           <div>
-            <h1 className="text-[18px] font-medium">Members</h1>
+            <h1 className="text-[18px] font-medium">Участники</h1>
             <div className="mt-3 rounded-[var(--radius-md)] border border-line px-3 py-2 text-[13px]">
               {user?.name} · {user?.email} · {workspace?.role ?? "owner"}
             </div>
           </div>
         )}
-        {section === "Billing" && (
-          <div>
-            <h1 className="text-[18px] font-medium">Billing</h1>
-            <p className="mt-2 text-[13px] text-ink-muted">
-              Billing не подключён. Credits — внутренняя единица workspace, не рубли. Баланс смотрите в Usage.
-            </p>
-          </div>
-        )}
-        {section === "AI Providers" && <AIProvidersStatus />}
-        {section === "Data Providers" && (
+        {section === "ИИ-модель" && <AIProvidersStatus />}
+        {section === "Источники данных" && (
           <div className="max-w-lg space-y-2 text-[13px]">
-            <h1 className="text-[18px] font-medium">Data Providers</h1>
-            <p>DaData · not connected</p>
-            <p>Контур · not connected</p>
-            <p>HeadHunter · not connected</p>
+            <h1 className="text-[18px] font-medium">Источники данных</h1>
+            <p className="text-ink-muted">Провайдеры обогащения, настроенные на сервере.</p>
+            {dataProviders === null ? <p className="text-ink-muted">Загружаем список…</p> : dataProviders.length ? dataProviders.map((provider) => (
+              <div key={provider.id} className="flex items-center justify-between gap-3 border-b border-line py-3">
+                <div><p className="font-medium">{provider.name}</p><p className="text-xs text-ink-muted">Регион: {provider.region} · операций: {provider.operations.length}</p></div>
+                <span className={provider.available ? "text-success" : "text-ink-muted"}>{provider.available ? "Доступен" : provider.configured ? "Нет соединения" : "Не настроен"}</span>
+              </div>
+            )) : <p className="text-ink-muted">Список провайдеров недоступен.</p>}
           </div>
         )}
-        {section === "Security" && (
+        {section === "Безопасность" && (
           <div>
-            <h1 className="text-[18px] font-medium">Security</h1>
-            <p className="mt-2 text-[13px] text-ink-muted">SSO и аудит появятся на этапе backend.</p>
+            <h1 className="text-[18px] font-medium">Безопасность</h1>
+            <p className="mt-2 max-w-lg text-[13px] text-ink-muted">Вход выполняется по одноразовой ссылке на почту. Срок JWT-сессии и секреты управляются backend.</p>
+            <div className="mt-4 max-w-lg border-t border-line py-3 text-[13px]">Аккаунт <span className="float-right text-ink-muted">{user?.email ?? "—"}</span></div>
           </div>
         )}
-        {section === "API" && (
-          <div className="max-w-lg">
-            <h1 className="text-[18px] font-medium">API</h1>
-            <p className="mt-2 text-[13px] text-ink-muted">
-              GET /api/v1/health, POST /api/v1/auth/login, GET /api/v1/auth/me, GET /api/v1/workspaces, GET /api/v1/workspaces/{"{id}"}/credits, GET /api/v1/system/ai/providers
-            </p>
-            <Input className="mt-3" readOnly value="VITE_API_URL=http://localhost:8000" />
-          </div>
-        )}
-        {section === "Appearance" && (
+        {section === "Внешний вид" && (
           <div className="max-w-lg space-y-4">
-            <h1 className="text-[18px] font-medium">Appearance</h1>
+            <h1 className="text-[18px] font-medium">Внешний вид</h1>
             <div className="flex gap-2">
               {(["light", "dark", "system"] as const).map((item) => (
                 <Button key={item} size="sm" variant={theme === item ? "secondary" : "ghost"} onClick={() => setTheme(item)}>
-                  {item}
+                  {item === "light" ? "Светлая" : item === "dark" ? "Тёмная" : "Как в системе"}
                 </Button>
               ))}
             </div>
             <label className="flex items-center justify-between text-[13px]">
-              Reduced transparency
+              Уменьшить прозрачность
               <Switch checked={reduceTransparency} onCheckedChange={setReduceTransparency} />
             </label>
           </div>

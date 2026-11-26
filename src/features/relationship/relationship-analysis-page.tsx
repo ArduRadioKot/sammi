@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, ArrowUpRight, MessageSquareText, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, Sheet } from "@/components/ui/dialog";
@@ -29,6 +29,7 @@ export default function RelationshipAnalysisPage() {
 }
 
 function AnalysisPage({ tableId }: { tableId: string }) {
+  const navigate = useNavigate();
   const [setup, setSetup] = useState<AnalysisSetup | null>(null);
   const [columns, setColumns] = useState<ColumnDefinition[]>([]);
   const [run, setRun] = useState<AnalysisRun | null>(null);
@@ -286,6 +287,9 @@ function AnalysisPage({ tableId }: { tableId: string }) {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h2 className="text-xl font-medium tracking-tight">{report.company}</h2>
                   <div className="flex flex-wrap gap-2">
+                    <Button variant="secondary" onClick={() => navigate(`/app/companies?analysis=${encodeURIComponent(tableId)}&contact=${encodeURIComponent(contactId)}`)}>
+                      <ArrowUpRight aria-hidden="true" /> Карта компаний
+                    </Button>
                     <Button variant="secondary" onClick={() => setShowAssistant(true)}>
                       <MessageSquareText aria-hidden="true" /> ИИ-помощник
                     </Button>
@@ -295,6 +299,7 @@ function AnalysisPage({ tableId }: { tableId: string }) {
                   </div>
                 </div>
                 <ReportView mode="overview" run={run} report={report} contactId={contactId} onSource={setSourceId}
+                  onOpenContact={(id) => navigate(`/app/companies?analysis=${encodeURIComponent(tableId)}&contact=${encodeURIComponent(id)}`)}
                   onContact={(id) => setSelected({ runId: run.id, id })}
                   onReview={(item) => setReviewItem({ runId: run.id, item })}
                   canApprove={setup.can_write && setup.enabled && !active && !run.stale && !saving}
@@ -326,7 +331,9 @@ function AnalysisPage({ tableId }: { tableId: string }) {
         <Dialog open={showExtended} onOpenChange={setShowExtended}>
           <DialogContent title={`Расширенный анализ · ${report.company}`} className="w-[min(1240px,calc(100%-24px))] max-h-[94dvh] overflow-y-auto p-4 sm:p-6">
             <div className="space-y-6">
+              <p className="max-w-3xl text-sm leading-6 text-ink-muted">Полная картина по клиенту: связи между участниками, роли и должности, история взаимодействий, публичные события, факты с источниками, риски и рекомендуемые следующие шаги.</p>
               <ReportView mode="extended" run={run} report={report} contactId={contactId} onSource={setSourceId}
+                onOpenContact={(id) => navigate(`/app/companies?analysis=${encodeURIComponent(tableId)}&contact=${encodeURIComponent(id)}`)}
                 onContact={(id) => setSelected({ runId: run.id, id })}
                 onReview={(item) => setReviewItem({ runId: run.id, item })}
                 canApprove={!!setup?.can_write && !!setup.enabled && !active && !run.stale && !saving}
