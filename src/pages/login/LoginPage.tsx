@@ -11,6 +11,7 @@ import { Input, Label } from "@/components/ui/forms";
 import { Check, Copy } from "lucide-react";
 import { productShots } from "@/assets/product/shots";
 import { APP_NAME } from "@/lib/constants/config";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { motionTokens } from "@/lib/motion/tokens";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -98,7 +99,8 @@ export function LoginPage() {
           </div>
         </div>
       </aside>
-      <main className="landing-light relative flex min-h-svh items-center px-6 py-16">
+      <main className="relative flex min-h-svh items-center bg-bg px-6 py-16 text-ink">
+        <div className="absolute right-5 top-5"><ThemeToggle /></div>
         <motion.form
           onSubmit={onSubmit}
           className="relative mx-auto w-full max-w-[380px]"

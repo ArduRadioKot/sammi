@@ -10,6 +10,7 @@ import { ENABLE_DEMO_DATA } from "@/lib/constants/config";
 import { relationshipAnalysis, type AnalysisRun } from "@/services/relationship-analysis";
 import { ReportView } from "@/features/relationship/analysis-report";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function CompaniesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -80,17 +81,16 @@ export default function CompaniesPage() {
           <p className="text-[13px] text-ink-muted">{filtered.length} записей</p>
         </div>
         <div className="flex gap-2">
-          <select
-            className="h-8 rounded-[var(--radius-sm)] border border-line bg-surface-0 px-2 text-[13px]"
-            value={industry}
-            onChange={(event) => setIndustry(event.target.value)}
-          >
+          <Select value={industry} onValueChange={setIndustry}>
+            <SelectTrigger aria-label="Отрасль" className="w-44"><SelectValue /></SelectTrigger>
+            <SelectContent>
             {industries.map((item) => (
-              <option key={item} value={item}>
+              <SelectItem key={item} value={item}>
                 {item === "all" ? "Все отрасли" : item}
-              </option>
+              </SelectItem>
             ))}
-          </select>
+            </SelectContent>
+          </Select>
           <Input className="w-64" placeholder="Поиск" value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
       </div>

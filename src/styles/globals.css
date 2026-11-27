@@ -44,6 +44,11 @@
   border-color: var(--line);
 }
 
+select, option {
+  background-color: var(--surface-0);
+  color: var(--ink);
+}
+
 html,
 body,
 #root {

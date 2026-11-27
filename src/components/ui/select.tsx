@@ -33,7 +33,7 @@ export function SelectContent({
 }) {
   return (
     <SelectPrimitive.Portal>
-      <SelectPrimitive.Content className="z-50 overflow-hidden rounded-[var(--radius-md)] border border-line bg-surface-0 shadow-[var(--shadow-float)]">
+      <SelectPrimitive.Content position="popper" sideOffset={5} className="z-50 max-h-[var(--radix-select-content-available-height)] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-[var(--radius-md)] border border-line bg-surface-0 text-ink shadow-[var(--shadow-float)]">
         <SelectPrimitive.Viewport className="p-1">{children}</SelectPrimitive.Viewport>
       </SelectPrimitive.Content>
     </SelectPrimitive.Portal>
@@ -50,7 +50,7 @@ export function SelectItem({
   return (
     <SelectPrimitive.Item
       value={value}
-      className="flex cursor-pointer items-center justify-between gap-2 rounded-[var(--radius-xs)] px-2 py-1.5 text-[13px] outline-none hover:bg-surface-1"
+      className="flex min-h-9 cursor-pointer items-center justify-between gap-2 rounded-[var(--radius-xs)] px-3 py-2 text-[13px] outline-none data-[highlighted]:bg-surface-1 data-[state=checked]:font-medium"
     >
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
       <SelectPrimitive.ItemIndicator>

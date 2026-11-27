@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { LogoMark } from "@/components/shell/logo";
 import { APP_NAME } from "@/lib/constants/config";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 const LINKS = [
   ["relationship-map", "Карта ЛПР"],
@@ -22,7 +23,7 @@ export function LandingNav() {
       <nav aria-label="Навигация сайта">
         {LINKS.map(([id, label]) => <a key={id} href={`${home}#${id}`}>{label}</a>)}
       </nav>
-      <Link to="/login" className="route-nav-login">Войти</Link>
+      <div className="flex items-center gap-2"><ThemeToggle /><Link to="/login" className="route-nav-login">Войти</Link></div>
     </header>
   );
 }
