@@ -23,4 +23,5 @@ export const edgeNames: Record<RelationshipType, string> = {
   influences: "Влияние на решение",
   collaborates_with: "Сотрудничество",
   introduced_by: "Познакомил",
+  shared_event: "Общее публичное событие",
 };

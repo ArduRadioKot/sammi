@@ -74,15 +74,15 @@ function NavLink({
       aria-current={active ? "page" : undefined}
       onClick={onNavigate}
       className={cn(
-        "group relative flex h-8 items-center gap-2 rounded-[var(--radius-sm)] px-2 text-[13px] transition-colors",
+        "group relative flex min-h-10 items-center gap-2.5 rounded-[var(--radius-sm)] px-2.5 text-sm transition-colors",
         collapsed && "justify-center px-0",
-        active ? "bg-surface-0 text-ink" : "text-ink-muted hover:bg-surface-0/70 hover:text-ink",
+        active ? "bg-accent-soft font-medium text-ink" : "text-ink-muted hover:bg-surface-0/70 hover:text-ink",
       )}
     >
       {active && (
         <span
           aria-hidden
-          className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-[var(--violet-700)]"
+          className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-accent"
         />
       )}
       <Icon className="size-4 shrink-0" />
@@ -122,19 +122,19 @@ export function AppSidebar() {
 
   return (
     <>
-      <button
-        type="button"
-        className="fixed top-3 left-3 z-30 flex size-9 items-center justify-center rounded-[var(--radius-sm)] border border-line bg-surface-0 lg:hidden"
-        onClick={() => setMobileNavOpen(true)}
-        aria-label="Открыть меню"
-      >
-        <Menu className="size-4" />
-      </button>
+      <header className="fixed inset-x-0 top-0 z-30 flex h-12 items-center gap-2 border-b border-line bg-sidebar px-3 lg:hidden">
+        <button type="button" className="grid size-10 place-items-center rounded-md text-ink hover:bg-surface-0"
+          onClick={() => setMobileNavOpen(true)} aria-label="Открыть меню" aria-expanded={mobileNavOpen} aria-controls="workspace-sidebar">
+          <Menu className="size-5" />
+        </button>
+        <span className="text-sm font-semibold">{APP_NAME}</span>
+      </header>
       <aside
+        id="workspace-sidebar"
         className={cn(
-          "z-50 flex h-full flex-col border-r border-line bg-sidebar transition-[transform,width] duration-[var(--motion-base)]",
+          "z-50 flex h-full shrink-0 flex-col border-r border-line bg-sidebar transition-[transform,width] duration-[var(--motion-base)]",
           "fixed inset-y-0 left-0 lg:static",
-          mobileNavOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+          mobileNavOpen ? "translate-x-0" : "invisible -translate-x-full lg:visible lg:translate-x-0",
         )}
         style={{ width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_WIDTH }}
       >
@@ -150,7 +150,7 @@ export function AppSidebar() {
           )}
         </div>
 
-        <nav className="flex-1 space-y-4 overflow-auto px-2 py-2">
+        <nav aria-label="Рабочее пространство" className="min-h-0 flex-1 space-y-4 overflow-auto px-2 py-2">
           <NavLink
             href="/app"
             label={ru.nav.home}
@@ -221,8 +221,7 @@ export function AppSidebar() {
                 <div className="text-[11px] text-ink-muted">{displayEmail}</div>
               </div>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => navigate("/app/settings")}>Account</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => navigate("/app/settings")}>Settings</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => { closeMobile(); navigate("/app/settings?section=account"); }}>Аккаунт</DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() =>
                   setTheme(theme === "dark" ? "light" : theme === "light" ? "system" : "dark")

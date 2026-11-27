@@ -1,185 +1,180 @@
-import { useEffect, useMemo, useState } from "react";
-import { Input, Skeleton } from "@/components/ui/forms";
-import { companiesService } from "@/services";
-import type { Company } from "@/types/domain";
-import { formatCurrencyRub, formatNumber, initials } from "@/lib/utils";
-import { Sheet } from "@/components/ui/dialog";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { stakeholderRepository, type StakeholderAccount } from "@/features/stakeholders/repository";
-import { ENABLE_DEMO_DATA } from "@/lib/constants/config";
-import { relationshipAnalysis, type AnalysisRun } from "@/services/relationship-analysis";
-import { ReportView } from "@/features/relationship/analysis-report";
+import { ArrowUpRight, Building2, MessageSquareText, Network } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge, Skeleton } from "@/components/ui/forms";
+import { AnalysisAssistant } from "@/features/relationship/analysis-assistant";
+import { AnalysisProgress } from "@/features/relationship/analysis-progress";
+import { ReportView } from "@/features/relationship/analysis-report";
+import { RowSource } from "@/features/relationship/row-source";
+import { selectClass } from "@/features/relationship/analysis-setup";
+import { ENABLE_DEMO_DATA } from "@/lib/constants/config";
+import { stakeholderRepository, type StakeholderAccount } from "@/features/stakeholders/repository";
+import { relationshipAnalysis, type AnalysisMapSummary, type AnalysisSetup } from "@/services/relationship-analysis";
+import { useAuthStore } from "@/stores/auth-store";
 
 export default function CompaniesPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const analysisTableId = searchParams.get("analysis") ?? "";
-  const requestedContactId = searchParams.get("contact") ?? "";
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [query, setQuery] = useState("");
-  const [industry, setIndustry] = useState("all");
-  const [selected, setSelected] = useState<Company | null>(null);
-  const [demoAccounts, setDemoAccounts] = useState<StakeholderAccount[]>([]);
-  const [analysisResult, setAnalysisResult] = useState<{ tableId: string; run: AnalysisRun | null; error: string }>({ tableId: "", run: null, error: "" });
-  const currentAnalysis = analysisResult.tableId === analysisTableId ? analysisResult : null;
-  const analysisRun = currentAnalysis?.run ?? null;
-  const analysisError = currentAnalysis?.error ?? "";
-  const analysisLoading = Boolean(analysisTableId && !currentAnalysis);
+  const workspaceId = useAuthStore((state) => state.workspace?.id);
+  return <CompanyDirectory key={workspaceId} workspaceId={workspaceId} />;
+}
+
+function CompanyDirectory({ workspaceId }: { workspaceId?: string }) {
+  const [params, setParams] = useSearchParams();
+  const [maps, setMaps] = useState<AnalysisMapSummary[] | null>(null);
+  const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const [demos, setDemos] = useState<StakeholderAccount[]>([]);
+  const tableId = params.get("analysis") || maps?.[0]?.table_id || "";
 
   useEffect(() => {
-    companiesService.listCompanies().then((items) => {
-      setCompanies(items);
-      setLoading(false);
+    if (!workspaceId) return;
+    const controller = new AbortController();
+    void relationshipAnalysis.maps(workspaceId, controller.signal).then(setMaps).catch(() => {
+      if (!controller.signal.aborted) setError("Не удалось загрузить список клиентов.");
     });
-    if (ENABLE_DEMO_DATA) void stakeholderRepository.listAccounts().then(setDemoAccounts);
+    return () => controller.abort();
+  }, [workspaceId, attempt]);
+
+  useEffect(() => {
+    if (ENABLE_DEMO_DATA) void stakeholderRepository.listAccounts().then(setDemos);
   }, []);
 
+  return (
+    <div className="h-full min-h-0 overflow-y-auto overscroll-y-contain">
+      <div className="mx-auto max-w-[88rem] space-y-3 px-4 pt-4 pb-8 sm:space-y-5 sm:px-8 sm:pt-7">
+        <header className="flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Компании</h1>
+          <Button asChild size="sm" variant="ghost"><Link to="/app/tables">К таблицам <ArrowUpRight /></Link></Button>
+        </header>
+        {error && <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-danger">
+          {error}
+          <Button size="sm" variant="secondary" onClick={() => { setError(""); setAttempt((value) => value + 1); }}>Повторить</Button>
+        </div>}
+        {!maps && !error && !tableId && <Skeleton className="h-40" />}
+        {!!maps?.length && (
+          <label className="grid max-w-lg min-w-0 gap-1 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center sm:gap-3">
+            <span className="text-sm text-ink-muted">Клиент</span>
+            <select className={`${selectClass} min-w-0`} value={tableId} onChange={(event) => setParams({ analysis: event.target.value })}>
+              {!maps.some((item) => item.table_id === tableId) && <option value={tableId}>Выбранная таблица</option>}
+              {maps.map((item) => <option key={item.table_id} value={item.table_id}>
+                {item.company}{item.table_name !== item.company ? ` · ${item.table_name}` : ""}
+              </option>)}
+            </select>
+          </label>
+        )}
+        {tableId ? (
+          <ClientMap
+            key={tableId}
+            tableId={tableId}
+            hasClientPicker={Boolean(maps?.some((map) => map.table_id === tableId))}
+            contactId={params.get("contact") ?? ""}
+            rowId={params.get("row") ?? ""}
+            onContact={(contact) => setParams({ analysis: tableId, contact }, { replace: true })}
+          />
+        ) : maps?.length === 0 && (
+          <section className="rounded-xl bg-surface-0 p-6 sm:p-10">
+            <Network className="mb-4 size-6 text-accent" />
+            <h2 className="text-lg font-medium">Пока нет карт клиентов</h2>
+            <p className="mt-2 max-w-lg text-sm text-ink-muted">Откройте таблицу с контактами, нажмите «Анализ» и укажите, из каких столбцов взять данные.</p>
+          </section>
+        )}
+        {!!demos.length && <section className="space-y-2">
+          <h2 className="text-sm font-medium">Демонстрационные клиенты</h2>
+          <ul className="divide-y divide-line rounded-lg bg-surface-0 px-4">
+            {demos.map((account) => <li key={account.id}>
+              <Link className="block py-3 text-sm hover:text-accent" to={`/app/companies/${account.id}/stakeholders`}>{account.name}</Link>
+            </li>)}
+          </ul>
+        </section>}
+      </div>
+    </div>
+  );
+}
+
+function ClientMap({ tableId, hasClientPicker, contactId, rowId, onContact }: {
+  tableId: string; hasClientPicker: boolean; contactId: string; rowId: string; onContact: (id: string) => void;
+}) {
+  const [setup, setSetup] = useState<AnalysisSetup | null>(null);
+  const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const [sourceId, setSourceId] = useState("");
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [rowMatch, setRowMatch] = useState<{ rowId: string; contactId: string } | null>(null);
+  const run = setup?.run;
+  const report = run?.report;
+  const running = run?.status === "queued" || run?.status === "running";
+  const canResolveRow = Boolean(report && rowId);
+  const resolvingContact = canResolveRow && !contactId && rowMatch?.rowId !== rowId;
+  const selected = contactId || (rowMatch?.rowId === rowId ? rowMatch.contactId : "");
+  const reportPath = `/app/tables/${tableId}/relationship-analysis`;
+  const extendedPath = `${reportPath}?v=extended${selected ? `&contact=${encodeURIComponent(selected)}` : ""}`;
+
   useEffect(() => {
-    if (!analysisTableId) return;
     const controller = new AbortController();
-    void relationshipAnalysis.setup(analysisTableId, controller.signal)
-      .then((setup) => {
+    let timer: ReturnType<typeof setTimeout>;
+    let pollInterval: number | undefined;
+    const load = async () => {
+      try {
+        const value = await relationshipAnalysis.setup(tableId, controller.signal);
         if (controller.signal.aborted) return;
-        if (!setup.run?.report) throw new Error("Для этой таблицы ещё нет готового анализа.");
-        setAnalysisResult({ tableId: analysisTableId, run: setup.run, error: "" });
-      })
-      .catch((error: unknown) => { if (!controller.signal.aborted) setAnalysisResult({ tableId: analysisTableId, run: null, error: error instanceof Error ? error.message : "Не удалось загрузить карту клиента." }); });
+        setSetup(value);
+        setError("");
+        const active = value.run?.status === "queued" || value.run?.status === "running";
+        pollInterval = active ? 2500 : value.run?.next_refresh_at ? 15000 : undefined;
+      } catch {
+        if (controller.signal.aborted) return;
+        setError("Не удалось загрузить анализ клиента.");
+      }
+      if (pollInterval !== undefined) timer = setTimeout(load, pollInterval);
+    };
+    void load();
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [tableId, attempt]);
+
+  useEffect(() => {
+    if (!canResolveRow) return;
+    const controller = new AbortController();
+    const unavailable = () => { if (!controller.signal.aborted) setRowMatch({ rowId, contactId: "" }); };
+    void relationshipAnalysis.contactCard(tableId, rowId, controller.signal).then((card) => {
+      if (!controller.signal.aborted) setRowMatch({ rowId, contactId: card?.contact.id ?? "" });
+    }).catch(unavailable);
     return () => controller.abort();
-  }, [analysisTableId]);
-
-  const selectAnalysisContact = (id: string) => {
-    setSearchParams((current) => {
-      current.set("contact", id);
-      return current;
-    }, { replace: true });
-  };
-
-  const industries = useMemo(
-    () => ["all", ...Array.from(new Set(companies.map((item) => item.industry)))],
-    [companies],
-  );
-
-  const filtered = useMemo(
-    () =>
-      companies.filter((company) => {
-        const matchesQuery = `${company.name} ${company.domain} ${company.city}`
-          .toLowerCase()
-          .includes(query.toLowerCase());
-        const matchesIndustry = industry === "all" || company.industry === industry;
-        return matchesQuery && matchesIndustry;
-      }),
-    [companies, query, industry],
-  );
+  }, [tableId, rowId, canResolveRow, run?.id, run?.status]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto p-5">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h1 className="text-[22px] font-medium tracking-[-0.03em]">Компании</h1>
-          <p className="text-[13px] text-ink-muted">{filtered.length} записей</p>
+    <section className="space-y-3" aria-label="Карта клиента">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
+        <div className={`min-w-0 ${hasClientPicker && !running && !run?.stale ? "sr-only sm:not-sr-only" : ""}`}>
+          <h2 className="flex items-center gap-2 text-lg font-semibold"><Building2 className="size-5 shrink-0 text-accent" />{report?.company ?? setup?.company_hint ?? "Карта клиента"}</h2>
+          {run?.stale && <Badge tone="amber" className="mt-1">Таблица изменилась после анализа</Badge>}
         </div>
-        <div className="flex gap-2">
-          <Select value={industry} onValueChange={setIndustry}>
-            <SelectTrigger aria-label="Отрасль" className="w-44"><SelectValue /></SelectTrigger>
-            <SelectContent>
-            {industries.map((item) => (
-              <SelectItem key={item} value={item}>
-                {item === "all" ? "Все отрасли" : item}
-              </SelectItem>
-            ))}
-            </SelectContent>
-          </Select>
-          <Input className="w-64" placeholder="Поиск" value={query} onChange={(e) => setQuery(e.target.value)} />
-        </div>
+        {setup && <div className="flex flex-wrap gap-2">
+          {report?.contacts.length ? <Button size="sm" variant="secondary" aria-label="Спросить по клиенту" onClick={() => setAssistantOpen(true)}>
+            <MessageSquareText /> Спросить<span className="hidden sm:contents"> по клиенту</span>
+          </Button> : null}
+          <Button asChild size="sm" variant={report ? "secondary" : "accent"}>
+            <Link to={report ? extendedPath : reportPath}>{report ? "Расширенный анализ" : running ? "Ход анализа" : run ? "Настроить анализ" : "Подготовить анализ"} <ArrowUpRight /></Link>
+          </Button>
+        </div>}
       </div>
-      {analysisTableId && (
-        <section className="shrink-0 space-y-3 rounded-2xl bg-surface-1 p-4 sm:p-5" aria-label="Карта участников клиента">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold tracking-tight">Карта клиента{analysisRun?.report?.company ? ` · ${analysisRun.report.company}` : ""}</h2>
-              <p className="mt-1 max-w-2xl text-sm text-ink-muted">Выберите участника на карте, чтобы открыть его карточку и посмотреть должность, отношения и рекомендации.</p>
-            </div>
-            {analysisRun && <Button asChild size="sm" variant="secondary"><Link to={`/app/tables/${analysisTableId}/relationship-analysis`}>Полный анализ</Link></Button>}
-          </div>
-          {analysisLoading && <Skeleton className="h-72" />}
-          {analysisError && <p role="alert" className="rounded-lg bg-danger-soft p-3 text-sm text-danger">{analysisError}</p>}
-          {analysisRun?.report && <ReportView
-            mode="overview"
-            run={analysisRun}
-            report={analysisRun.report}
-            contactId={requestedContactId}
-            onContact={selectAnalysisContact}
-            onSource={() => {}}
-            onReview={() => {}}
-            onApproveRelationship={() => {}}
-            canApprove={false}
-          />}
-        </section>
+      {((!setup && !error) || setup?.enabled || run) && (
+        <AnalysisProgress run={run ?? null} loading={!setup} />
       )}
-      {ENABLE_DEMO_DATA && <section className="shrink-0 rounded-[var(--radius-md)] border border-line bg-surface-0 p-3">
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <div><h2 className="text-[13px] font-medium">Карта ЛПР · демонстрационные клиенты</h2><p className="text-[11px] text-ink-muted">Вымышленные компании. Изменения сохраняются локально в браузере.</p></div>
-          <span className="rounded bg-warning-soft px-2 py-1 text-[10px] text-warning">Mock CRM</span>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-3">
-          {demoAccounts.map((account) => <Link key={account.id} to={`/app/companies/${account.id}/stakeholders`} className="flex min-h-12 items-center justify-between gap-2 rounded border border-line px-3 py-2 hover:bg-surface-1"><span className="min-w-0"><span className="block truncate text-[12px] font-medium">{account.name}</span><span className="block text-[10px] text-ink-muted">{account.industry} · 18 участников</span></span><span aria-hidden className="text-accent">→</span></Link>)}
-        </div>
-      </section>}
-      <div className="flex min-h-[220px] flex-1 flex-col overflow-auto rounded-[var(--radius-md)] border border-line">
-        <div className="grid grid-cols-[1.4fr_140px_100px_110px_90px_120px_80px] bg-surface-1 px-3 py-2 text-[11px] text-ink-muted">
-          <span>Company</span>
-          <span>Industry</span>
-          <span>City</span>
-          <span>Employees</span>
-          <span>Intent</span>
-          <span>Revenue</span>
-          <span>Score</span>
-        </div>
-        {loading ? (
-          <div className="p-3">
-            <Skeleton className="h-8" />
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="p-8 text-center text-[13px] text-ink-muted">Компаний пока нет.</div>
-        ) : (
-          filtered.slice(0, 120).map((company) => (
-            <button
-              key={company.id}
-              type="button"
-              className="grid w-full grid-cols-[1.4fr_140px_100px_110px_90px_120px_80px] items-center border-t border-line px-3 py-2 text-left text-[13px] hover:bg-row-hover"
-              onClick={() => setSelected(company)}
-            >
-              <span className="flex items-center gap-2 truncate">
-                <span className="flex size-5 items-center justify-center rounded-[4px] bg-surface-2 text-[10px]">
-                  {initials(company.name)}
-                </span>
-                {company.name}
-              </span>
-              <span>{company.industry}</span>
-              <span className="text-ink-muted">{company.city}</span>
-              <span>{formatNumber(company.employees)}</span>
-              <span>{company.intent}</span>
-              <span className="text-ink-muted">{formatCurrencyRub(company.revenue)}</span>
-              <span>{company.score}</span>
-            </button>
-          ))
-        )}
-      </div>
-      <Sheet open={Boolean(selected)} onOpenChange={() => setSelected(null)} title="Company">
-        {selected && (
-          <div className="space-y-2 text-[13px]">
-            <div className="text-[16px] font-medium">{selected.name}</div>
-            <div className="text-ink-muted">
-              {selected.domain} · {selected.city}
-            </div>
-            <div>ИНН {selected.inn}</div>
-            <div>ОГРН {selected.ogrn}</div>
-            <div>{selected.aiResearch || "AI research не запускался"}</div>
-          </div>
-        )}
-      </Sheet>
-    </div>
+      {error && <div role="alert" className="flex items-center gap-3 text-sm text-danger">
+        {error}<Button size="sm" variant="secondary" onClick={() => { setError(""); setAttempt((value) => value + 1); }}>Повторить</Button>
+      </div>}
+      {!setup && !error && <Skeleton className="h-72" />}
+      {setup && !report && !running && <p className="rounded-lg bg-surface-0 p-4 text-sm text-ink-muted">Карта появится после обработки таблицы контактов.</p>}
+      {rowId && ((rowMatch?.rowId === rowId && !rowMatch.contactId) || (setup && !report && !running)) && (
+        <p className="text-sm text-ink-muted">В отчёте нет контакта для этой точки. <button type="button" className="text-accent underline" onClick={() => setSourceId(rowId)}>Открыть исходную строку</button></p>
+      )}
+      {resolvingContact && <Skeleton className="h-72" />}
+      {run && report && !resolvingContact && <ReportView mode="overview" run={run} report={report}
+        contactId={selected} onContact={onContact} onSource={setSourceId} />}
+      {sourceId && <RowSource key={sourceId} tableId={tableId} rowId={sourceId} onClose={() => setSourceId("")} />}
+      {run && report && !!report.contacts.length && <AnalysisAssistant key={run.id}
+        tableId={tableId} contacts={report.contacts} contactId={selected} onSource={setSourceId}
+        disabled={run.stale || !setup?.enabled} open={assistantOpen} onOpenChange={setAssistantOpen} />}
+    </section>
   );
 }

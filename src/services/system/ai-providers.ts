@@ -34,9 +34,6 @@ export type AIProviderTestResult = {
   duration_ms: number | null;
 };
 
-export type AIChatMessage = { role: "user" | "assistant"; content: string };
-export type AIChatResponse = { content: string; model: string; duration_ms: number | null };
-
 export function listAIProviders(signal?: AbortSignal) {
   return apiClient.get<{ providers: AIProviderStatus[] }>(`${apiConfig.versionPrefix}/system/ai/providers`, signal);
 }
@@ -58,8 +55,4 @@ export function testAIProvider(providerId: string, model?: string) {
   return apiClient.post<AIProviderTestResult>(`${apiConfig.versionPrefix}/system/ai/providers/${providerId}/test`, {
     model: model || undefined,
   });
-}
-
-export function askWorkAssistant(messages: AIChatMessage[], model?: string) {
-  return apiClient.post<AIChatResponse>(`${apiConfig.versionPrefix}/system/ai/chat`, { messages, model });
 }

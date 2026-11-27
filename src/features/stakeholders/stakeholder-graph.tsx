@@ -1,8 +1,8 @@
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useState, useSyncExternalStore } from "react";
 import { FileText, Maximize, Minus, Plus, Users, X } from "lucide-react";
 import { initials } from "@/lib/utils";
 import { CARD, layoutGraph, routeEdges } from "./graph-layout";
-import { edgeNames, roleNames, stanceNames } from "./graph-labels";
+import { edgeNames, stanceNames } from "./graph-labels";
 import type { RelationshipType, StakeholderContact, StakeholderEdge } from "./repository";
 import { MAX_SCALE, useGraphCamera } from "./use-graph-camera";
 
@@ -11,9 +11,17 @@ const RELATIONS = {
   influences: { label: "Влияние", dash: "7 4", directed: true },
   collaborates_with: { label: "Сотрудничество", dash: undefined, directed: false },
   introduced_by: { label: "Знакомство", dash: "2 4", directed: true },
+  shared_event: { label: "Общее публичное событие", dash: "2 5", directed: false },
 } satisfies Record<RelationshipType, { label: string; dash: string | undefined; directed: boolean }>;
 const RELATION_TYPES = Object.keys(RELATIONS) as RelationshipType[];
 const dateLabel = (value: string) => new Date(value).toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+const compactQuery = "(max-width: 639px)";
+const compactScreen = () => window.matchMedia(compactQuery).matches;
+function subscribeToScreenSize(notify: () => void) {
+  const media = window.matchMedia(compactQuery);
+  media.addEventListener("change", notify);
+  return () => media.removeEventListener("change", notify);
+}
 
 type GraphProps = {
   accountName: string;
@@ -24,15 +32,21 @@ type GraphProps = {
   selectedId: string;
   onSelect: (id: string) => void;
   publicationCounts?: ReadonlyMap<string, number>;
+  showPopup?: boolean;
+  focusSelection?: boolean;
 };
 
-export function StakeholderGraph({ accountName, contacts, totalContacts, edges, departments, selectedId, onSelect, publicationCounts }: GraphProps) {
+export function StakeholderGraph({
+  accountName, contacts, totalContacts, edges, departments, selectedId, onSelect,
+  publicationCounts, showPopup = true, focusSelection = true,
+}: GraphProps) {
   const uid = useId();
   const [popupId, setPopupId] = useState("");
   const [initialContactId] = useState(selectedId);
-  const { nodes, size } = useMemo(() => layoutGraph(contacts, edges, departments), [contacts, edges, departments]);
+  const compact = useSyncExternalStore(subscribeToScreenSize, compactScreen, () => false) && !showPopup;
+  const { nodes, size } = useMemo(() => layoutGraph(contacts, edges, departments, compact), [compact, contacts, edges, departments]);
   const paths = useMemo(() => routeEdges(edges, nodes), [edges, nodes]);
-  const initialFocus = nodes.get(initialContactId) ?? nodes.values().next().value;
+  const initialFocus = focusSelection ? nodes.get(initialContactId) ?? nodes.values().next().value : undefined;
   const { svgRef, camera, dragging, gesture, minScale, pan, reveal, zoom, fit, pointerHandlers } = useGraphCamera(size, initialFocus);
   const visibleSelection = nodes.has(selectedId);
   const connected = new Set<string>();
@@ -46,16 +60,16 @@ export function StakeholderGraph({ accountName, contacts, totalContacts, edges, 
 
   return (
     <>
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-2 text-xs">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-2 gap-y-1 px-2.5 py-1.5 text-xs sm:px-4">
         <span className="flex items-center gap-1.5 text-ink-muted">
           <Users aria-hidden="true" className="size-3.5" />
-          {contacts.length} из {totalContacts} · Связи: {paths.length}
+          <span className="hidden sm:inline">{contacts.length} из {totalContacts} · </span>Связи: {paths.length}
         </span>
         <div className="flex items-center gap-1" role="group" aria-label="Управление картой">
           <button type="button" aria-label="Уменьшить масштаб" disabled={camera.scale <= minScale} onClick={() => zoom(1 / 1.25)} className="stakeholder-map-control">
             <Minus aria-hidden="true" className="size-4" />
           </button>
-          <span className="w-12 text-center font-mono-data text-[11px]" aria-label="Масштаб">{Math.round(camera.scale * 100)}%</span>
+          <span className="w-9 text-center text-[11px] tabular-nums sm:w-12" aria-label="Масштаб">{Math.round(camera.scale * 100)}%</span>
           <button type="button" aria-label="Увеличить масштаб" disabled={camera.scale >= MAX_SCALE} onClick={() => zoom(1.25)} className="stakeholder-map-control">
             <Plus aria-hidden="true" className="size-4" />
           </button>
@@ -109,12 +123,12 @@ export function StakeholderGraph({ accountName, contacts, totalContacts, edges, 
                   data-unverified={edge.confidence !== "verified"}
                   aria-hidden="true"
                 >
-                  <title>{from.contact.name} {relation.directed ? "→" : "↔"} {to.contact.name} · {edgeNames[edge.type]} · {edge.confidence === "verified" ? "Подтверждено" : "Требует проверки"}</title>
+                  <title>{from.contact.name} {relation.directed ? "→" : "↔"} {to.contact.name} · {edgeNames[edge.type]} · {edge.type === "shared_event" ? edge.evidence : edge.confidence === "verified" ? "Подтверждено" : "Требует проверки"}</title>
                   <path className="stakeholder-edge-target" d={path} />
                   <path
                     className="stakeholder-edge-line"
                     d={path}
-                    strokeDasharray={relation.dash ?? (edge.confidence !== "verified" ? "4 4" : undefined)}
+                    strokeDasharray={edge.confidence !== "verified" ? "4 4" : relation.dash}
                     markerEnd={relation.directed ? `url(#${uid}-${edge.type})` : undefined}
                   />
                 </g>
@@ -133,7 +147,7 @@ export function StakeholderGraph({ accountName, contacts, totalContacts, edges, 
                     aria-label={`${contact.name}${contact.title ? `, ${contact.title}` : ""}, ${stanceNames[contact.stance]}${publications ? `, публичных событий ${publications}` : ""}`}
                     aria-pressed={contact.id === selectedId}
                     onFocus={(event) => { if (event.currentTarget.matches(":focus-visible")) reveal(node); }}
-                    onClick={() => { setPopupId(contact.id); onSelect(contact.id); }}
+                    onClick={() => { if (showPopup) setPopupId(contact.id); onSelect(contact.id); }}
                     title={contact.name}
                   >
                     <span className="stakeholder-node-avatar" aria-hidden="true">{initials(contact.name)}</span>
@@ -169,7 +183,7 @@ export function StakeholderGraph({ accountName, contacts, totalContacts, edges, 
                     </button>
                     <p className="truncate pr-7 text-[10px] text-ink-muted">{accountName}</p>
                     <h3 className="mt-0.5 truncate text-[13px] font-semibold">{contact.name}</h3>
-                    <p className="truncate text-[11px] text-ink-muted">{[contact.title, contact.department, roleNames[contact.role]].filter(Boolean).join(" · ")}</p>
+                    <p className="truncate text-[11px] text-ink-muted">{[contact.title || "Должность не указана", contact.department].filter(Boolean).join(" · ")}</p>
                     <p className="mt-1 truncate text-[10px] text-ink-muted">Последняя встреча · {contact.lastMeetingAt ? dateLabel(contact.lastMeetingAt) : "нет данных"}</p>
                   </section>
                 </foreignObject>
@@ -178,8 +192,8 @@ export function StakeholderGraph({ accountName, contacts, totalContacts, edges, 
           </g>
         </svg>
       </div>
-      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 text-[11px] text-ink-muted">
-        {RELATION_TYPES.map((type) => (
+      <div className={`shrink-0 text-[11px] text-ink-muted ${paths.length ? "flex flex-wrap items-center gap-x-4 gap-y-1 px-3 py-2 sm:px-4" : ""}`}>
+        {RELATION_TYPES.filter((type) => paths.some(({ edge }) => edge.type === type)).map((type) => (
           <span key={type} className="flex items-center gap-1.5">
             <svg aria-hidden="true" viewBox="0 0 24 10" width="24" height="10" className="stakeholder-legend" data-type={type}>
               <path d="M 0 5 H 19" stroke="currentColor" strokeWidth={2} strokeDasharray={RELATIONS[type].dash} />
@@ -188,10 +202,11 @@ export function StakeholderGraph({ accountName, contacts, totalContacts, edges, 
             {RELATIONS[type].label}
           </span>
         ))}
+        {paths.some(({ edge }) => edge.confidence !== "verified") && <span>Пунктирные предложения требуют проверки.</span>}
         <span id={`${uid}-navigation`} className="sr-only">
-          Перетащите карту мышью или пальцем. Колесо и жест двумя пальцами меняют масштаб. На клавиатуре используйте стрелки, плюс и минус. Клавиша Home покажет всю карту.
+          Перетащите карту мышью или пальцем. Для масштабирования используйте Ctrl или ⌘ с колесом, кнопки либо жест двумя пальцами. На клавиатуре используйте стрелки, плюс и минус. Клавиша Home покажет всю карту.
         </span>
-        <span className="ml-auto hidden text-ink-muted xl:inline">Перетаскивание · масштаб колесом</span>
+        {!!paths.length && <span className="ml-auto hidden text-ink-muted xl:inline">Перетаскивание · масштаб Ctrl / ⌘ + колесо</span>}
       </div>
     </>
   );

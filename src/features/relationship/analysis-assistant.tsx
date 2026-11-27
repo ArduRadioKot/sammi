@@ -1,9 +1,11 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { Bot, Send, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/dialog";
 import { Badge, Textarea } from "@/components/ui/forms";
 import { ApiError } from "@/lib/api/errors";
+import { usePreferences } from "@/stores/preferences-store";
 import { relationshipAnalysis, type AnalysisAnswer, type AnalysisQuestion, type ContactAnalysis } from "@/services/relationship-analysis";
 import { FindingItem } from "./analysis-report";
 import { selectClass } from "./analysis-setup";
@@ -23,11 +25,23 @@ export function AnalysisAssistant({
   const [target, setTarget] = useState("");
   const [pending, setPending] = useState("");
   const [error, setError] = useState("");
+  const [failed, setFailed] = useState<AnalysisQuestion | null>(null);
   const [turns, setTurns] = useState<Array<{ question: string; answer: AnalysisAnswer }>>([]);
   const contact = contacts.find((item) => item.id === contactId) ?? contacts[0];
+  const sendOnEnter = usePreferences((state) => state.sendOnEnter);
+  const log = useRef<HTMLDivElement>(null);
+  const composer = useRef<HTMLTextAreaElement>(null);
+  const requestPending = useRef(false);
+
+  useEffect(() => {
+    if (open && log.current) log.current.scrollTop = log.current.scrollHeight;
+  }, [open, pending, turns, error]);
 
   const ask = async (input: AnalysisQuestion) => {
+    if (disabled || requestPending.current) return;
+    requestPending.current = true;
     setError("");
+    setFailed(null);
     setPending(input.question);
     try {
       const answer = await relationshipAnalysis.ask(tableId, {
@@ -35,18 +49,25 @@ export function AnalysisAssistant({
         previous_questions: input.intent === "question" ? turns.slice(-3).map((turn) => turn.question) : [],
       });
       setTurns((items) => [...items, { question: input.question, answer }]);
-      if (input.intent === "question") setQuestion("");
     } catch (reason) {
+      setFailed(input);
       setError(reason instanceof ApiError && reason.code.startsWith("AI_")
         ? "Gemma 4 временно не ответила. Повторите запрос."
         : reason instanceof ApiError ? reason.message : "Не удалось получить ответ.");
     } finally {
+      requestPending.current = false;
       setPending("");
     }
   };
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (question.trim().length >= 3) void ask({ question: question.trim(), intent: "question" });
+    sendQuestion();
+  };
+  const sendQuestion = () => {
+    const text = question.trim();
+    if (text.length < 3 || disabled || requestPending.current) return;
+    setQuestion("");
+    void ask({ question: text, intent: "question", contact_id: contactId || undefined });
   };
 
   return (
@@ -58,7 +79,7 @@ export function AnalysisAssistant({
             <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent"><Bot className="size-4" /></span>
             <span className="min-w-0"><span className="block truncate text-sm font-medium">{contact.name}</span><span className="block truncate text-xs text-ink-muted">{contact.title || "Должность не указана"}</span></span>
           </div>
-          <Button type="button" size="icon" variant="ghost" aria-label="Очистить переписку" title="Очистить переписку" disabled={!turns.length || !!pending} onClick={() => setTurns([])}><Trash2 className="size-4" /></Button>
+          <Button type="button" size="icon" variant="ghost" aria-label="Очистить переписку" title="Очистить переписку" disabled={!turns.length || !!pending} onClick={() => { setTurns([]); setError(""); setFailed(null); }}><Trash2 className="size-4" /></Button>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -73,20 +94,23 @@ export function AnalysisAssistant({
           })}>Черновик письма</Button>
         </div>
         {contacts.length > 1 && (
-          <div className="flex min-w-0 gap-2">
-            <select className={selectClass} aria-label="Целевой контакт для поиска пути"
-              value={target === contact.id ? "" : target} onChange={(event) => setTarget(event.target.value)}>
-              <option value="">Путь к контакту</option>
-              {contacts.filter((item) => item.id !== contact.id).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
-            </select>
-            <Button variant="secondary" disabled={!target || target === contact.id} onClick={() => void ask({
-              question: `Путь от ${contact.name} к контакту ${contacts.find((item) => item.id === target)?.name}.`,
-              contact_id: contact.id, target_id: target, intent: "path",
-            })}>Найти</Button>
-          </div>
+          <details>
+            <summary className="cursor-pointer py-1 text-sm text-ink-muted hover:text-ink">Найти связь между контактами</summary>
+            <div className="mt-2 flex min-w-0 gap-2">
+              <select className={selectClass} aria-label="Целевой контакт для поиска пути"
+                value={target === contact.id ? "" : target} onChange={(event) => setTarget(event.target.value)}>
+                <option value="">Путь к контакту</option>
+                {contacts.filter((item) => item.id !== contact.id).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
+              </select>
+              <Button variant="secondary" disabled={!target || target === contact.id} onClick={() => void ask({
+                question: `Путь от ${contact.name} к контакту ${contacts.find((item) => item.id === target)?.name}.`,
+                contact_id: contact.id, target_id: target, intent: "path",
+              })}>Найти</Button>
+            </div>
+          </details>
         )}
       </fieldset>
-      <div className="min-h-0 flex-1 space-y-3 overflow-auto border-t border-line pt-3" role="log" aria-label="История вопросов">
+      <div ref={log} className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-y-contain border-t border-line pt-3" role="log" aria-label="История вопросов">
         {turns.length === 0 && <p className="rounded-xl bg-surface-1 p-3 text-sm leading-6 text-ink-muted">Задайте вопрос об этом клиенте. Например: «С чего начать следующую встречу?» или «Кто влияет на решение?»</p>}
         {turns.map((turn, index) => (
           <article key={index} className="space-y-3">
@@ -102,19 +126,31 @@ export function AnalysisAssistant({
             </div></div>
           </article>
         ))}
+        {pending && <p role="status" className="rounded-lg bg-accent-soft p-3 text-sm">Готовлю ответ на вопрос «{pending}»</p>}
+        {error && <div role="alert" className="space-y-2 rounded-lg bg-danger-soft p-3 text-sm text-danger">
+          <p>{error}</p>
+          {failed && <Button type="button" size="sm" variant="secondary" onClick={() => void ask(failed)}>Повторить запрос</Button>}
+        </div>}
       </div>
-      {pending && <p role="status" className="text-sm text-ink-muted">Обрабатываю запрос…</p>}
-      {error && <p role="alert" className="text-sm text-danger">{error}</p>}
       <form onSubmit={submit} className="shrink-0 space-y-2 border-t border-line pt-3">
         <Textarea
-          className="min-h-[90px] resize-y" aria-label="Вопрос по клиенту"
+          ref={composer} className="min-h-[72px] resize-none" aria-label="Вопрос по клиенту"
           placeholder="Кто согласует бюджет? О чём поговорить на встрече?"
           maxLength={800} value={question} onChange={(event) => setQuestion(event.target.value)}
+          onKeyDown={(event) => {
+            if (!event.nativeEvent.isComposing && sendOnEnter && event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              sendQuestion();
+            }
+          }}
           disabled={disabled || !!pending}
         />
-        <Button type="submit" variant="accent" disabled={disabled || !!pending || question.trim().length < 3}>
-          <Send /> Спросить
-        </Button>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Link to="/app/agents" className="text-xs text-ink-muted hover:text-accent">Рабочий чат</Link>
+          <Button type="submit" variant="accent" disabled={disabled || !!pending || question.trim().length < 3}>
+            <Send /> Спросить
+          </Button>
+        </div>
       </form>
       {disabled && <p className="text-xs text-ink-muted">Для вопросов нужен актуальный отчёт.</p>}
       </aside>

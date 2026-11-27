@@ -19,7 +19,7 @@ from app.schemas.relationship import (
     OUTPUT_CONFIG_KEY, AnalysisAnswer, AnalysisRead, AnalysisReport, AnalysisRequest, AnalysisSetup, AskRequest,
     ContactCard, Corpus, Finding, LinkedPublication, PublishedAnalysis, PublicationReviewRequest, RefreshRequest,
     Relationship, RelationshipApproval,
-    ReviewDecision, ReviewPreview, Verification,
+    ReviewDecision, ReviewPreview, SearchRefreshRequest, Verification, WebSearchStatus,
 )
 from app.services.relationship import audio, discovery, inference, publications, web_search
 from app.services.relationship.datasets import list_datasets, save_datasets
@@ -267,6 +267,39 @@ class AnalysisService:
         if run is None or run.id != run_id:
             raise AppError("RELATIONSHIP_RUN_NOT_FOUND", "Запуск анализа не найден.", 404)
         return run, Corpus.model_validate(run.corpus)
+
+    async def restart_search(self, table_id: uuid.UUID, user: User, body: SearchRefreshRequest) -> AnalysisRead:
+        _, member = await self.access.table_for_user(table_id, user)
+        require_write(member)
+        _enabled()
+        table = await self._lock_table(table_id)
+        run = await self._current(table_id, include_corpus=True, lock=True)
+        if run is None:
+            raise AppError("RELATIONSHIP_RUN_NOT_FOUND", "Сначала запустите анализ клиента.", 404)
+        _ensure_idle(run)
+        if run.table_updated_at != table.updated_at:
+            raise AppError("RELATIONSHIP_STALE_INPUT", "Таблица обновилась. Запустите анализ повторно.", 409)
+        try:
+            web_search.search_endpoint()
+            urls = [publications.publication_url(value) for value in dict.fromkeys(body.urls)]
+        except publications.PublicationError as exc:
+            raise AppError("RELATIONSHIP_SEARCH_INVALID", str(exc), 422) from exc
+        corpus = Corpus.model_validate(run.corpus)
+        known = {item.url for item in corpus.publications}
+        for url in urls:
+            if url not in known:
+                corpus.publications.append(LinkedPublication(id=f"manual-search-{len(corpus.publications) + 1}", url=url, label=url))
+                known.add(url)
+        corpus.web_search = WebSearchStatus(total_contacts=len(corpus.contacts), keywords=list(dict.fromkeys(body.keywords)))
+        report = AnalysisReport.model_validate(run.report) if run.report else await asyncio.to_thread(build_report, corpus)
+        run.corpus = corpus.model_dump(mode="json")
+        run.report = report.model_copy(update={
+            "web_search": corpus.web_search, "publications": publication_statuses(corpus),
+        }).model_dump(mode="json")
+        run.status, run.progress, run.error = "queued", 10, None
+        if run.refresh_hours:
+            run.next_refresh_at = utc_now() + timedelta(hours=run.refresh_hours)
+        return await self._read_with_datasets(run, table)
 
     async def update_refresh(self, table_id: uuid.UUID, user: User, body: RefreshRequest) -> AnalysisRead:
         _, member = await self.access.table_for_user(table_id, user)
@@ -557,15 +590,32 @@ async def run_one() -> bool:
                 search.searched_contacts = 0
                 search.discovered = 0
                 search.reason = None
+                search.queries = 0
+                search.failed_queries = 0
+                search.wikipedia_queries = 0
+                search.wikipedia_discovered = 0
+                search.sitemap_queries = 0
+                search.sitemap_discovered = 0
                 failures = 0
                 processed = 0
                 try:
-                    async with aclosing(web_search.batches(corpus)) as batches:
+                    async with asyncio.timeout(web_search.STAGE_SECONDS), aclosing(web_search.batches(corpus)) as batches:
                         async for batch in batches:
-                            processed += sum(len(item.contact_ids) for item in batch)
-                            failures += sum(len(item.contact_ids) for item in batch if item.error)
+                            processed += sum(len(item.contact_ids) for item in batch if not item.pair)
+                            failures += sum(len(item.contact_ids) for item in batch if not item.pair and item.error)
+                            search.queries += sum(item.queries for item in batch)
+                            search.failed_queries += sum(item.failed_queries for item in batch)
+                            search.wikipedia_queries += sum(item.wikipedia_queries for item in batch)
+                            search.sitemap_queries += sum(item.sitemap_queries for item in batch)
                             search.searched_contacts = processed - failures
+                            before = len(corpus.publications)
                             search.discovered += web_search.apply_results(corpus, batch)
+                            search.wikipedia_discovered += sum(
+                                item.search_provider == "wikipedia" for item in corpus.publications[before:]
+                            )
+                            search.sitemap_discovered += sum(
+                                item.search_provider == "sitemap" for item in corpus.publications[before:]
+                            )
                             search.reason = next((item.error for item in batch if item.error), search.reason)
                             report = await asyncio.to_thread(build_report, corpus)
                             if not await _save(
@@ -573,12 +623,16 @@ async def run_one() -> bool:
                                 report=report, corpus=corpus,
                             ):
                                 return True
-                            if not search.searched_contacts and failures:
-                                break
                 except publications.PublicationError as exc:
                     failures += 1
                     search.reason = str(exc)
-                search.state = "partial" if failures and search.searched_contacts else "unavailable" if failures else "checked"
+                except TimeoutError:
+                    failures += 1
+                    search.reason = "Истекло время поиска. Сохранены уже найденные источники."
+                search.state = (
+                    "partial" if failures and (search.searched_contacts or search.discovered)
+                    else "unavailable" if failures else "checked"
+                )
                 search.checked_at = utc_now()
                 if failures:
                     error = "RELATIONSHIP_WEB_SEARCH_FAILED"

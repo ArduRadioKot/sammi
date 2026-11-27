@@ -9,7 +9,7 @@ export function AppLayout() {
   const setMobileNavOpen = useUiStore((s) => s.setMobileNavOpen);
 
   return (
-    <div className="flex h-svh overflow-hidden bg-bg text-ink">
+    <div className="flex h-dvh overflow-hidden bg-bg text-ink">
       {mobileNavOpen ? (
         <button
           type="button"
@@ -19,8 +19,8 @@ export function AppLayout() {
         />
       ) : null}
       <AppSidebar />
-      <main className="min-h-0 min-w-0 flex-1 overflow-hidden pt-12 lg:pt-0">
-        <Outlet />
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pt-12 lg:pt-0">
+        <div className="min-h-0 flex-1 overflow-hidden"><Outlet /></div>
       </main>
       <CommandPalette />
     </div>
@@ -29,7 +29,7 @@ export function AppLayout() {
 
 export function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="flex h-svh overflow-hidden bg-bg text-ink">
+    <div className="flex h-dvh overflow-hidden bg-bg text-ink">
       <AppSidebar />
       <main className="min-w-0 flex-1 overflow-hidden">{children}</main>
       <CommandPalette />

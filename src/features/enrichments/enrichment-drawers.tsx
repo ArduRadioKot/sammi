@@ -77,7 +77,6 @@ export function EnrichmentDrawer({
     () => columns.filter((column) => column.type !== "enrichment" && column.type !== "ai"),
     [columns],
   );
-  const cost = operation?.credits_per_success ?? 0;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange} title="Добавить enrichment" width={480}>
@@ -112,7 +111,7 @@ export function EnrichmentDrawer({
                     </div>
                   </div>
                   <div className="shrink-0 text-[11px] text-ink-muted">
-                    {disabled ? "Нет API key" : `${item.operations[0]?.credits_per_success ?? 0} credit / success`}
+                    {disabled ? "Нет ключа API" : "Доступен"}
                   </div>
                 </button>
               );
@@ -184,9 +183,6 @@ export function EnrichmentDrawer({
               <div>
                 <Label htmlFor="enrichment-name">Название колонки</Label>
                 <Input id="enrichment-name" className="mt-1" value={name} onChange={(event) => setName(event.target.value)} />
-              </div>
-              <div className="rounded-[var(--radius-sm)] bg-surface-1 px-3 py-2 text-[13px]">
-                {cost} credit / successful result
               </div>
               <Button
                 className="w-full"

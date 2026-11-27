@@ -25,9 +25,9 @@ const PAGES = {
     body: "Data residency в РФ, RBAC, audit logs, SSO и on-premise в дорожной карте, не в маркетинговом слогане.",
   },
   pricing: {
-    title: "Pricing",
-    headline: "Credits за результат, не за шум.",
-    body: "Команда платит за enrichment и AI-run. На этом этапе demo workspace без биллинга.",
+    title: "Доступ",
+    headline: "Попробуйте Sammi.",
+    body: "Войдите в рабочее пространство, чтобы импортировать контакты и построить карту клиента.",
   },
   docs: {
     title: "Docs",

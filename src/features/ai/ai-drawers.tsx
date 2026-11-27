@@ -157,7 +157,6 @@ export function AiColumnDrawer({
         <div className="mt-2">Input: Яндекс / yandex.ru</div>
         <div className="mt-1 text-ink-muted">{prompt}</div>
         <div className="mt-2">Mock output: Яндекс развивает поисковые, облачные и рекламные продукты для B2B и B2C.</div>
-        <div className="mt-2">Cost estimate: 2 credits / row</div>
       </div>
       <div className="mt-4 flex gap-2">
         <Button variant="secondary" className="flex-1" onClick={() => onSave(config(), false)}>

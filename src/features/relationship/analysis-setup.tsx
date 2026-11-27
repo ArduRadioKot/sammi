@@ -2,6 +2,8 @@ import { useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/forms";
 import type { AnalysisDocument, AnalysisField, AnalysisPublications, ColumnMapping, RefreshHours } from "@/services/relationship-analysis";
+import { usePreferences } from "@/stores/preferences-store";
+import { parseSearchKeywords, searchKeywordError } from "./search-keywords";
 import type { ColumnDefinition } from "@/types/domain";
 
 const primaryFields: Array<[AnalysisField, string]> = [
@@ -27,10 +29,11 @@ const externalLinks = (values: string[], limit: number) =>
   values.length <= limit && values.every((url) => /^https:\/\//i.test(url) && url.length <= 2000);
 
 export function SetupForm({
-  columns, initial, saving, replacing, webSearchConfigured, onStart,
+  columns, initial, initialKeywords, saving, replacing, webSearchConfigured, onStart,
 }: {
   columns: ColumnDefinition[];
   initial: ColumnMapping;
+  initialKeywords?: string[];
   saving: boolean;
   replacing: boolean;
   webSearchConfigured: boolean;
@@ -43,8 +46,15 @@ export function SetupForm({
   const [fetchCsvUrls, setFetchCsvUrls] = useState(false);
   const [linkError, setLinkError] = useState("");
   const [feedUrls, setFeedUrls] = useState("");
-  const [refreshHours, setRefreshHours] = useState<RefreshHours>(webSearchConfigured ? 24 : null);
-  const [useWebSearch, setUseWebSearch] = useState(webSearchConfigured);
+  const preferredKeywords = usePreferences((state) => state.searchKeywords);
+  const [keywords, setKeywords] = useState(initialKeywords?.join("\n") ?? preferredKeywords);
+  const preferredSearch = usePreferences((state) => state.searchByDefault);
+  const preferredRefresh = usePreferences((state) => state.refreshHours);
+  const startsWithSearch = webSearchConfigured && preferredSearch !== false;
+  const [refreshHours, setRefreshHours] = useState<RefreshHours>(
+    preferredRefresh === "automatic" ? (startsWithSearch ? 24 : null) : preferredRefresh,
+  );
+  const [useWebSearch, setUseWebSearch] = useState(startsWithSearch);
   const fields = (items: Array<[AnalysisField, string]>) => items.map(([field, label]) => (
     <label key={field} className="grid gap-1 text-xs text-ink-muted">
       {label}{field === "name" ? " *" : ""}
@@ -74,10 +84,13 @@ export function SetupForm({
       setLinkError("Вставьте до четырёх HTTPS-ссылок на RSS или Atom.");
       return;
     }
+    const phrases = useWebSearch ? parseSearchKeywords(keywords) : [];
+    const error = searchKeywordError(phrases);
+    if (error) { setLinkError(error); return; }
     setLinkError("");
     await onStart(mapping, documents, {
       urls, fetch_csv_urls: !!mapping.public_url && fetchCsvUrls, feed_urls: feeds,
-      refresh_hours: feeds.length || useWebSearch ? refreshHours : null, web_search: useWebSearch,
+      refresh_hours: feeds.length || useWebSearch ? refreshHours : null, web_search: useWebSearch, search_keywords: phrases,
     });
   };
 
@@ -108,6 +121,11 @@ export function SetupForm({
               {webSearchConfigured ? "В поисковый запрос входят ФИО и название компании." : "Для веб-поиска подключите SearXNG на сервере."}
             </p>
           </div>
+          {useWebSearch && <label className="grid gap-1 text-xs text-ink-muted">
+            Ключевые слова для этого клиента
+            <Textarea value={keywords} maxLength={850} className="min-h-16" placeholder="Через запятую или с новой строки"
+              onChange={(event) => { setKeywords(event.target.value); setLinkError(""); }} />
+          </label>}
           <label className="grid gap-1 text-xs text-ink-muted">
             Ссылки для фоновой загрузки
             <Textarea

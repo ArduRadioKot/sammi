@@ -1,22 +1,20 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowUpRight, MessageSquareText, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, Sheet } from "@/components/ui/dialog";
-import { Badge, Skeleton } from "@/components/ui/forms";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/forms";
 import { ApiError } from "@/lib/api/errors";
-import { relationshipAnalysis, type AnalysisDocument, type AnalysisPublications, type AnalysisRun, type AnalysisSetup, type ColumnMapping, type RefreshHours, type ReviewItem } from "@/services/relationship-analysis";
+import { companyMapUrl, relationshipAnalysis, type AnalysisDocument, type AnalysisPublications, type AnalysisRun, type AnalysisSetup, type ColumnMapping, type RefreshHours, type ReviewItem } from "@/services/relationship-analysis";
 import { tablesService } from "@/services/tables";
 import type { ColumnDefinition } from "@/types/domain";
 import { AnalysisAssistant } from "./analysis-assistant";
+import { AnalysisProgress } from "./analysis-progress";
+import { RowSource } from "./row-source";
+import { SearchRefresh } from "./search-refresh";
 import { ReportView } from "./analysis-report";
 import { parseRefresh, refreshOptions, SetupForm } from "./analysis-setup";
 import { PublicationReview } from "./publication-review";
-
-const statuses = {
-  queued: "В очереди", running: "Обрабатывается Gemma 4", completed: "Анализ готов",
-  partial: "Частичный результат", failed: "Анализ прерван",
-};
 
 const isActive = (run: AnalysisRun | null) => run?.status === "queued" || run?.status === "running";
 const message = (reason: unknown) => reason instanceof ApiError && reason.code !== "NETWORK_ERROR"
@@ -34,7 +32,8 @@ function AnalysisPage({ tableId }: { tableId: string }) {
   const [columns, setColumns] = useState<ColumnDefinition[]>([]);
   const [run, setRun] = useState<AnalysisRun | null>(null);
   const [configure, setConfigure] = useState(false);
-  const [showExtended, setShowExtended] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const showExtended = params.get("v") === "extended";
   const [showAssistant, setShowAssistant] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -50,18 +49,7 @@ function AnalysisPage({ tableId }: { tableId: string }) {
   const runId = run?.id;
   const nextRefreshAt = run?.next_refresh_at;
   const report = run?.report;
-  const running = run?.status === "running";
-  const inputStatus = running && (
-    run.progress < 25 && report?.recordings.some((item) => item.state === "pending" || item.retryable)
-      ? "Расшифровываются записи"
-      : run.progress < 40 && report?.web_search?.state === "pending"
-        ? "Ищутся публикации по ФИО и компании"
-        : run.progress < 55 && (report?.publications.some((item) => item.state === "pending" || item.retryable)
-        || report?.feeds.some((item) => item.state === "pending" || item.retryable))
-        ? "Проверяются публичные источники"
-        : null
-  );
-  const contactId = selected?.runId === runId ? selected?.id ?? "" : "";
+  const contactId = selected?.runId === runId ? selected?.id ?? "" : params.get("contact") ?? "";
 
   useEffect(() => {
     const controller = new AbortController();
@@ -144,6 +132,18 @@ function AnalysisPage({ tableId }: { tableId: string }) {
     }
   };
 
+  const restartSearch = async (keywords: string[], urls: string[]) => {
+    setSaving(true);
+    setActionError("");
+    try {
+      setRun(await relationshipAnalysis.restartSearch(tableId, keywords, urls));
+    } catch (reason) {
+      setActionError(message(reason));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const changeRefresh = async (hours: RefreshHours) => {
     setSaving(true);
     setActionError("");
@@ -188,36 +188,53 @@ function AnalysisPage({ tableId }: { tableId: string }) {
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-bg">
-      <div className="mx-auto max-w-[1260px] space-y-5 px-4 py-5 sm:px-6 lg:px-8">
+    <div className="h-full min-h-0 overflow-y-auto overscroll-y-contain bg-bg">
+      <div className="mx-auto max-w-[88rem] space-y-4 px-4 pt-4 pb-8 sm:space-y-5 sm:px-8 sm:pt-7">
         <Link className="inline-flex items-center gap-1.5 text-sm text-ink-muted hover:text-ink" to={`/app/tables/${tableId}`}>
           <ArrowLeft className="size-4" /> К таблице
         </Link>
         <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <div className="mb-1 text-sm text-ink-muted">{report?.company ?? setup?.company_hint}</div>
-            <h1 className="text-2xl font-medium tracking-tight">Анализ отношений</h1>
+            <h1 className="text-2xl font-medium tracking-tight">{showExtended ? "Расширенный анализ" : "Анализ отношений"}</h1>
           </div>
-          {setup && <Badge tone="violet">Локальная Gemma 4 · Ollama</Badge>}
+          {run && report && (
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="secondary" asChild>
+                <Link to={companyMapUrl(tableId, { contact: contactId })}><ArrowUpRight aria-hidden="true" /> Карта компаний</Link>
+              </Button>
+              {report.contacts.length > 0 && (
+                <Button size="sm" variant="secondary" onClick={() => setShowAssistant(true)}>
+                  <MessageSquareText aria-hidden="true" /> ИИ-помощник
+                </Button>
+              )}
+              <Button size="sm" variant="accent" onClick={() => setParams(showExtended
+                ? (contactId ? { contact: contactId } : {})
+                : { v: "extended", ...(contactId ? { contact: contactId } : {}) })}>
+                {showExtended ? "Краткий обзор" : "Расширенный анализ"} <ArrowUpRight aria-hidden="true" />
+              </Button>
+            </div>
+          )}
         </header>
+        {!loadError && (!setup || setup.enabled || run) && (
+          <AnalysisProgress run={run} loading={!setup} pollError={active ? pollError : undefined} />
+        )}
         {loadError && (
           <div role="alert" className="flex flex-wrap items-center gap-2 text-sm text-danger">
             {loadError}
             <Button variant="secondary" size="sm" onClick={() => { setLoadError(""); setAttempt(attempt + 1); }}>Повторить</Button>
           </div>
         )}
-        {!setup && !loadError && <Skeleton className="h-44" />}
         {setup && (
           <>
             {!setup.enabled && <p role="status" className="text-sm text-ink-muted">Анализ отключён в настройках API.</p>}
             {run && (
-              <section className="space-y-2 rounded-lg border border-line bg-surface-0 p-4" aria-label="Состояние анализа">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div role="status" className="flex flex-wrap items-center gap-2 text-sm font-medium">
-                    {inputStatus || statuses[run.status]}
-                    {active && <span className="text-xs tabular-nums text-ink-muted">{run.progress}%</span>}
-                    {run.stale && <Badge tone="amber">Таблица изменилась</Badge>}
-                  </div>
+              <details open={active || !report || undefined} className="rounded-lg border border-line bg-surface-0" aria-label="Управление отчётом">
+                <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
+                  Управление отчётом
+                  {run.stale && <Badge tone="amber" className="ml-2">Таблица изменилась</Badge>}
+                </summary>
+                <div className="space-y-3 border-t border-line px-4 py-3">
                   {setup.can_write && (
                     <div className="flex flex-wrap gap-2">
                       {!active && !run.stale && report && (
@@ -238,68 +255,58 @@ function AnalysisPage({ tableId }: { tableId: string }) {
                       </Button>
                     </div>
                   )}
+                  {run.error && !active && <p className="text-sm text-ink-muted">Обработка части материалов не завершилась. Доступны базовые метрики и обработанные источники.</p>}
+                  {publication?.runId === run.id && <p role="status" className="text-xs text-success">{publication.message}</p>}
+                  {!!run.datasets.length && (
+                    <nav aria-label="Таблицы анализа" className="flex flex-wrap items-center gap-2 pt-1">
+                      {run.datasets.map((dataset) => (
+                        <Button key={dataset.entity} size="sm" variant="secondary" asChild>
+                          <Link to={`/app/tables/${dataset.table_id}`}>{dataset.name}</Link>
+                        </Button>
+                      ))}
+                    </nav>
+                  )}
+                  {(!!report?.feeds.length || report?.web_search) && (
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+                      {setup.can_write && (
+                        <label className="flex items-center gap-2">
+                          {report?.web_search ? "Обновлять поиск" : "Проверять ленты"}
+                          <select className="rounded-md border border-line bg-surface-0 px-2 py-1 text-ink"
+                            value={run.refresh_hours ?? ""} disabled={saving || active}
+                            onChange={(event) => void changeRefresh(parseRefresh(event.target.value))}>
+                            {refreshOptions.map((option) => (
+                              <option key={option.value} value={option.value} disabled={!!option.value && (run.stale || !setup.enabled)}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                      {run.next_refresh_at && <time dateTime={run.next_refresh_at}>
+                        Следующее обновление · {new Date(run.next_refresh_at).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })}
+                      </time>}
+                      {run.refresh_hours && run.stale && <span>Обновления приостановлены до нового анализа таблицы.</span>}
+                    </div>
+                  )}
                 </div>
-                {active && <progress aria-label="Прогресс анализа" max={100} value={run.progress} className="block h-2 w-full accent-accent" />}
-                {pollError && active && <p role="status" className="text-xs text-ink-muted">{pollError} Проверка состояния продолжится.</p>}
-                {run.error && !active && <p className="text-sm text-ink-muted">Обработка части материалов не завершилась. Доступны базовые метрики и обработанные источники.</p>}
-                {publication?.runId === run.id && <p role="status" className="text-xs text-success">{publication.message}</p>}
-                {!!run.datasets.length && (
-                  <nav aria-label="Таблицы анализа" className="flex flex-wrap items-center gap-2 pt-1">
-                    {run.datasets.map((dataset) => (
-                      <Button key={dataset.entity} size="sm" variant="secondary" asChild>
-                        <Link to={`/app/tables/${dataset.table_id}`}>{dataset.name}</Link>
-                      </Button>
-                    ))}
-                  </nav>
-                )}
-                {(!!report?.feeds.length || report?.web_search) && (
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
-                    {setup.can_write && (
-                      <label className="flex items-center gap-2">
-                        {report?.web_search ? "Обновлять поиск" : "Проверять ленты"}
-                        <select className="rounded-md border border-line bg-surface-0 px-2 py-1 text-ink"
-                          value={run.refresh_hours ?? ""} disabled={saving || active}
-                          onChange={(event) => void changeRefresh(parseRefresh(event.target.value))}>
-                          {refreshOptions.map((option) => (
-                            <option key={option.value} value={option.value} disabled={!!option.value && (run.stale || !setup.enabled)}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
-                    {run.next_refresh_at && <time dateTime={run.next_refresh_at}>
-                      Следующее обновление · {new Date(run.next_refresh_at).toLocaleString("ru-RU", { dateStyle: "medium", timeStyle: "short" })}
-                    </time>}
-                    {run.refresh_hours && run.stale && <span>Обновления приостановлены до нового анализа таблицы.</span>}
-                  </div>
-                )}
-              </section>
+              </details>
             )}
             {actionError && <p role="alert" className="text-sm text-danger">{actionError}</p>}
             {setup.enabled && setup.can_write && !active && (!run || configure) && (
               <SetupForm columns={columns} initial={setup.columns} saving={saving} replacing={!!run}
-                webSearchConfigured={setup.web_search_configured} onStart={start} />
+                initialKeywords={report?.web_search?.keywords} webSearchConfigured={setup.web_search_configured} onStart={start} />
             )}
             {!run && !setup.can_write && <p className="text-sm text-ink-muted">Для этой таблицы ещё нет отчёта.</p>}
             {run && report && (
               <section className="space-y-4" key={run.id}>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="text-xl font-medium tracking-tight">{report.company}</h2>
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="secondary" onClick={() => navigate(`/app/companies?analysis=${encodeURIComponent(tableId)}&contact=${encodeURIComponent(contactId)}`)}>
-                      <ArrowUpRight aria-hidden="true" /> Карта компаний
-                    </Button>
-                    <Button variant="secondary" onClick={() => setShowAssistant(true)}>
-                      <MessageSquareText aria-hidden="true" /> ИИ-помощник
-                    </Button>
-                    <Button variant="accent" onClick={() => setShowExtended(true)}>
-                      Расширенный анализ <ArrowUpRight aria-hidden="true" />
-                    </Button>
-                  </div>
-                </div>
-                <ReportView mode="overview" run={run} report={report} contactId={contactId} onSource={setSourceId}
-                  onOpenContact={(id) => navigate(`/app/companies?analysis=${encodeURIComponent(tableId)}&contact=${encodeURIComponent(id)}`)}
+                <ReportView mode={showExtended ? "extended" : "overview"} run={run} report={report} contactId={contactId} onSource={setSourceId}
+                  searchControls={showExtended && setup.can_write && setup.enabled && setup.web_search_configured && !run.stale ? (
+                    <div className="space-y-2">
+                      <SearchRefresh key={run.id} initial={report.web_search?.keywords} disabled={active || saving} onSearch={restartSearch} />
+                      {actionError && <p role="alert" className="text-sm text-danger">{actionError}</p>}
+                    </div>
+                  ) : undefined}
+                  onOpenContact={(id) => navigate(companyMapUrl(tableId, { contact: id }))}
                   onContact={(id) => setSelected({ runId: run.id, id })}
                   onReview={(item) => setReviewItem({ runId: run.id, item })}
                   canApprove={setup.can_write && setup.enabled && !active && !run.stale && !saving}
@@ -327,59 +334,11 @@ function AnalysisPage({ tableId }: { tableId: string }) {
           </div>
         </DialogContent>
       </Dialog>
-      {run && report && (
-        <Dialog open={showExtended} onOpenChange={setShowExtended}>
-          <DialogContent title={`Расширенный анализ · ${report.company}`} className="w-[min(1240px,calc(100%-24px))] max-h-[94dvh] overflow-y-auto p-4 sm:p-6">
-            <div className="space-y-6">
-              <p className="max-w-3xl text-sm leading-6 text-ink-muted">Полная картина по клиенту: связи между участниками, роли и должности, история взаимодействий, публичные события, факты с источниками, риски и рекомендуемые следующие шаги.</p>
-              <ReportView mode="extended" run={run} report={report} contactId={contactId} onSource={setSourceId}
-                onOpenContact={(id) => navigate(`/app/companies?analysis=${encodeURIComponent(tableId)}&contact=${encodeURIComponent(id)}`)}
-                onContact={(id) => setSelected({ runId: run.id, id })}
-                onReview={(item) => setReviewItem({ runId: run.id, item })}
-                canApprove={!!setup?.can_write && !!setup.enabled && !active && !run.stale && !saving}
-                onApproveRelationship={(proposalId) => void approveRelationship(proposalId)} />
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
-      {run && report && (
-        <AnalysisAssistant tableId={tableId} contacts={report.contacts} contactId={contactId}
+      {run && report && !!report.contacts.length && (
+        <AnalysisAssistant key={run.id} tableId={tableId} contacts={report.contacts} contactId={contactId}
           onSource={setSourceId} disabled={run.stale || !setup?.enabled}
           open={showAssistant} onOpenChange={setShowAssistant} />
       )}
     </div>
-  );
-}
-
-function RowSource({
-  tableId, rowId, columns, onClose,
-}: { tableId: string; rowId: string; columns: ColumnDefinition[]; onClose: () => void }) {
-  const [data, setData] = useState<Record<string, unknown> | null>(null);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    const controller = new AbortController();
-    void relationshipAnalysis.row(tableId, rowId, controller.signal)
-      .then((result) => { if (!controller.signal.aborted) setData(result.data); })
-      .catch((reason: unknown) => { if (!controller.signal.aborted) setError(message(reason)); });
-    return () => controller.abort();
-  }, [tableId, rowId]);
-
-  return (
-    <Sheet open onOpenChange={(open) => { if (!open) onClose(); }} title="Строка CRM">
-      {error && <p role="alert" className="text-sm text-danger">{error}</p>}
-      {!error && !data && <Skeleton className="h-36" />}
-      {data && (
-        <dl className="space-y-3">
-          {columns.filter((column) => data[column.id] != null).map((column) => (
-            <div key={column.id} className="border-b border-line pb-2">
-              <dt className="text-xs text-ink-muted">{column.name}</dt>
-              <dd className="mt-1 whitespace-pre-wrap wrap-break-word text-sm">
-                {typeof data[column.id] === "object" ? JSON.stringify(data[column.id]) : String(data[column.id])}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      )}
-    </Sheet>
   );
 }

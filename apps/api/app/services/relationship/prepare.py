@@ -1,6 +1,8 @@
 import base64
+import re
 from dataclasses import dataclass
 from datetime import date, datetime
+from itertools import combinations
 from pathlib import PurePath
 from typing import Any
 from urllib.parse import urlsplit
@@ -13,17 +15,21 @@ from app.core.errors import AppError
 from app.models.table import TableColumn, TableRow
 from app.schemas.relationship import (
     FIELD_ALIASES, OUTPUT_CONFIG_KEY, AnalysisRequest, Contact, Corpus, DocumentMetadata, FeedStatus, FieldName,
-    LinkedPublication, Recording, Relationship, ReviewItem, Source, WebSearchStatus,
+    Finding, LinkedPublication, PublicConnection, Recording, Relationship, ReviewItem, Source, WebSearchStatus,
 )
 from app.services.relationship.audio import MAX_RECORDINGS, Segment
 from app.services.relationship.publications import (
     MAX_REMOTE_PUBLICATIONS, DownloadedPublication, PublicationError, publication_url,
 )
-from app.services.relationship.text import clean, normalized, safe_url, split_text, tokens
+from app.services.relationship.text import cite, clean, normalized, safe_url, split_text, tokens
 
 MAX_ROWS = 1000
 MAX_CONTACTS = 40
 MAX_CORPUS_CHARS = 600_000
+EVENT_WORDS = re.compile(
+    r"\b(?:conference|keynotes?|panels?|summit|webinar|linuxcon|workshop|конференц\w*|"
+    r"доклад\w*|вебинар\w*|форум\w*|саммит\w*|панельн\w*)\b", re.I,
+)
 CRM_METADATA = {
     "industry", "active_projects", "deal_value_total", "last_deal_at", "last_interaction_at", "technology_stack",
     "reports_to_id", "internal_owner", "relationship_status", "last_touch_at", "touches_90d", "employee_id",
@@ -360,7 +366,7 @@ def prepare(
                   feeds=list(feeds.values()), account_loyalty=account_loyalty,
                   row_contacts={str(row_id): contact.id for row_id, _, contact in row_contacts},
                   crm_fields={row_id: fields for row_id, fields in crm_fields.items() if fields},
-                  web_search=WebSearchStatus(total_contacts=len(contacts)) if request.web_search else None)
+                  web_search=WebSearchStatus(total_contacts=len(contacts), keywords=request.search_keywords) if request.web_search else None)
 
 
 def _queue_publication(
@@ -392,6 +398,54 @@ def _identify_publication(
                   subject=contact.name, match_confidence=score)
 
 
+def _named_contacts(text: str, corpus: Corpus, item: LinkedPublication, occurred: date | None, now: datetime) -> list[tuple[Contact, float]]:
+    """Use independent evidence for each person on a page rather than picking a single winner."""
+    name_index: dict[str, list[Contact]] = {}
+    for contact in corpus.contacts:
+        name_index.setdefault(normalized(contact.name), []).append(contact)
+    padded = f" {normalized(text)} "
+    if not name_index or not normalized(corpus.company):
+        return []
+    result = []
+    for name, matches in name_index.items():
+        if len(matches) != 1 or len(name.split()) < 2 or f" {name} " not in padded:
+            continue
+        contact = matches[0]
+        if item.contact_rows and contact.id not in item.contact_rows:
+            continue
+        matched, score, _ = _match_identity(text, corpus.company, [contact], occurred, now.date())
+        if matched is not None:
+            result.append((contact, score))
+    if item.expected_contacts and not any(contact.id in item.expected_contacts for contact, _ in result):
+        return []
+    return result
+
+
+def _event_links(corpus: Corpus, source: Source, matches: list[tuple[Contact, float]]) -> None:
+    if len(matches) < 2:
+        return
+    existing = {frozenset((item.from_id, item.to_id)) for item in corpus.public_connections}
+    event_in_title = EVENT_WORDS.search(source.label)
+    passages = [(part, f" {normalized(part)} ") for part in split_text(source.text, 420)
+                if event_in_title or EVENT_WORDS.search(part)]
+    # Require both independently matched names in a short passage from an identifiable event page.
+    for left, right in combinations(matches, 2):
+        pair = frozenset((left[0].id, right[0].id))
+        if pair in existing or len(corpus.public_connections) >= 40:
+            continue
+        names = [normalized(left[0].name), normalized(right[0].name)]
+        quote = next((part for part, normalized_part in passages
+                      if all(f" {name} " in normalized_part for name in names)), None)
+        if quote is None:
+            continue
+        corpus.public_connections.append(PublicConnection(
+            id=f"event-{source.id}-{left[0].id}-{right[0].id}", from_id=left[0].id, to_id=right[0].id,
+            finding=Finding(text=f"{left[0].name} и {right[0].name} упомянуты в материале об одном публичном событии",
+                            citations=[cite(source, quote)]),
+        ))
+        existing.add(pair)
+
+
 def attach_publication(
     corpus: Corpus, item: LinkedPublication, downloaded: DownloadedPublication, now: datetime,
 ) -> None:
@@ -403,6 +457,28 @@ def attach_publication(
         item.reason = "Достигнут лимит текста для анализа клиента."
         return
     occurred = item.occurred_at or downloaded.occurred_at
+    unique = _named_contacts(downloaded.text, corpus, item, occurred, now)
+    if len(unique) > 1:
+        evidence = Source(id=item.id, kind="publication", label=item.label, text=downloaded.text, url=item.url,
+                          occurred_at=occurred, collected_at=now)
+        _event_links(corpus, evidence, unique)
+        fragments = split_text(downloaded.text)
+        for contact, score in unique:
+            if any(source.url == item.url and source.contact_id == contact.id for source in corpus.sources):
+                continue
+            name = f" {normalized(contact.name)} "
+            selected = [part for part in fragments if name in f" {normalized(part)} "][:3]
+            for index, part in enumerate(selected or fragments[:1]):
+                if _retained_size(corpus) + len(part) > MAX_CORPUS_CHARS:
+                    break
+                corpus.sources.append(evidence.model_copy(update={
+                    "id": f"{item.id}-{contact.id}-part-{index}", "event_id": item.id, "text": part,
+                    "subject": contact.name, "contact_id": contact.id, "match_confidence": score,
+                    "row_id": item.contact_rows.get(contact.id),
+                }))
+        item.state = "included"
+        item.reason = None
+        return
     matched = _identify_publication(
         item.id, item.label, downloaded.text, item.url, occurred,
         now, corpus.company, corpus.contacts, item.contact_rows, item.expected_contacts,

@@ -2,7 +2,8 @@ import asyncio
 from dataclasses import dataclass
 from datetime import date, timedelta
 from email.utils import parsedate_to_datetime
-from urllib.parse import urljoin
+from urllib.parse import unquote, urljoin
+from xml.etree.ElementTree import Element
 
 import httpx
 from defusedxml.ElementTree import fromstring
@@ -15,6 +16,7 @@ FEED_TYPES = {"application/rss+xml", "application/atom+xml", "application/xml", 
 MAX_DISCOVERED_PER_FEED = 10
 MAX_FEED_ENTRIES = 200
 MAX_FEED_BYTES = 1024 * 1024
+SITEMAP_TYPES = {"application/xml", "text/xml", "text/plain"}
 
 
 @dataclass(frozen=True)
@@ -74,6 +76,73 @@ async def load_feed(url: str) -> list[Entry]:
         raise publications.PublicationError("Публичная лента временно недоступна.", retryable=True) from exc
     except (ValueError, httpx.InvalidURL) as exc:
         raise publications.PublicationError("Лента вернула некорректный адрес.", blocked=True) from exc
+
+
+async def _load_sitemap(url: str, domain: str) -> Element:
+    final_url, _, _, body = await publications.download_resource(url, SITEMAP_TYPES)
+    if httpx.URL(final_url).host.removeprefix("www.") != domain:
+        raise publications.PublicationError("Карта сайта перенаправила запрос на другой домен.")
+    return await asyncio.to_thread(fromstring, body)
+
+
+def _sitemap_links(roots: list[Element], domain: str, names: list[str], keywords: list[str],
+                   known: set[str], limit: int) -> list[Entry]:
+    people = [name.split() for name in map(normalized, names)]
+    terms = [term for keyword in keywords if (term := normalized(keyword))]
+    ranked = {}
+    for root in roots:
+        if root.tag.rsplit("}", 1)[-1] != "urlset":
+            continue
+        for item in root.findall("{*}url"):
+            url = (item.findtext("{*}loc") or "").strip()
+            if not url or url in known:
+                continue
+            try:
+                parsed = httpx.URL(url)
+            except httpx.InvalidURL:
+                continue
+            if parsed.host.removeprefix("www.") != domain or parsed.query:
+                continue
+            slug = unquote(parsed.path.rstrip("/").rsplit("/", 1)[-1])
+            if not slug or "." in slug:
+                continue
+            title = normalized(slug.replace("-", " ").replace("_", " "))
+            haystack = f" {title} "
+            full_names = sum(len(parts) >= 2 and f" {' '.join(parts)} " in haystack for parts in people)
+            surnames = sum(len(parts) >= 2 and len(parts[-1]) >= 5 and f" {parts[-1]} " in haystack for parts in people)
+            matches = sum(f" {term} " in haystack for term in terms)
+            if not (full_names or matches):
+                continue
+            try:
+                url = publications.publication_url(url)
+            except publications.PublicationError:
+                continue
+            rank = 9 * full_names + 3 * surnames + 2 * matches
+            ranked[url] = (rank, Entry(url, title, "", None))
+    return [entry for _, entry in sorted(ranked.values(), key=lambda value: (-value[0], value[1].url))[:limit]]
+
+
+async def search_sitemap(origin: httpx.URL, names: list[str], keywords: list[str], known: set[str],
+                         limit: int) -> list[Entry]:
+    domain = origin.host.removeprefix("www.")
+    async with asyncio.timeout(18):
+        root = await _load_sitemap(str(origin.copy_with(path="/sitemap.xml", query=None, fragment=None)), domain)
+        roots = [root]
+        if root.tag.rsplit("}", 1)[-1] == "sitemapindex":
+            children = []
+            for item in root.findall("{*}sitemap"):
+                try:
+                    url = publications.publication_url((item.findtext("{*}loc") or "").strip())
+                except publications.PublicationError:
+                    continue
+                if httpx.URL(url).host.removeprefix("www.") == domain and url not in children:
+                    children.append(url)
+            children.sort(key=lambda url: not any(word in httpx.URL(url).path for word in ("post", "news", "blog", "press")))
+            results = await asyncio.gather(*(_load_sitemap(url, domain) for url in children[:2]), return_exceptions=True)
+            roots = [item for item in results if isinstance(item, Element)]
+            if results and not roots:
+                raise publications.PublicationError("Не удалось прочитать разделы карты сайта.")
+        return await asyncio.to_thread(_sitemap_links, roots, domain, names, keywords, known, limit)
 
 
 def apply_feed(corpus: Corpus, feed: FeedStatus, entries: list[Entry], today: date) -> None:

@@ -3,13 +3,11 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/forms";
 import { tablesService } from "@/services";
-import { creditsService } from "@/services/credits";
-import { formatCredits, formatNumber } from "@/lib/utils";
+import { formatNumber } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { ru as ruLocale } from "date-fns/locale";
 import type { DataTable } from "@/types/domain";
 import { useAuthStore } from "@/stores/auth-store";
-import { useWorkspaceStore } from "@/stores/workspace-store";
 import { ImportWizard } from "@/features/tables/components/csv-import-wizard";
 
 export default function DashboardPage() {
@@ -17,11 +15,9 @@ export default function DashboardPage() {
   const [tables, setTables] = useState<DataTable[]>([]);
   const [loading, setLoading] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
-  const [credits, setCredits] = useState<number | null>(null);
   const user = useAuthStore((s) => s.user);
   const workspace = useAuthStore((s) => s.workspace);
   const workspaceId = workspace?.id;
-  const creditsEpoch = useWorkspaceStore((s) => s.creditsEpoch);
   const name = user?.name ?? "коллега";
 
   useEffect(() => {
@@ -32,17 +28,10 @@ export default function DashboardPage() {
       setTables(items);
       setLoading(false);
     });
-    creditsService.getBalance(workspaceId).then((balance) => {
-      if (cancelled) return;
-      setCredits(balance.available);
-    }).catch(() => {
-      if (cancelled) return;
-      setCredits(null);
-    });
     return () => {
       cancelled = true;
     };
-  }, [workspaceId, creditsEpoch]);
+  }, [workspaceId]);
 
   return (
     <div className="h-full overflow-auto">
@@ -55,37 +44,20 @@ export default function DashboardPage() {
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => navigate("/app/tables")}>Создать таблицу</Button>
             <Button variant="secondary" onClick={() => setImportOpen(true)}>
-              Import CSV
+              Импорт CSV
             </Button>
           </div>
         </div>
 
-        <section className="mt-6 grid gap-3 md:grid-cols-3">
-          <div className="rounded-[var(--radius-md)] border border-line px-4 py-3">
-            <div className="text-[11px] text-ink-muted">Credits remaining</div>
-            <div className="mt-1 text-[22px] tracking-[-0.03em]">
-              {credits == null ? "—" : formatCredits(credits)}
-            </div>
-          </div>
-          <div className="rounded-[var(--radius-md)] border border-line px-4 py-3">
-            <div className="text-[11px] text-ink-muted">Signals today</div>
-            <div className="mt-1 text-[22px] tracking-[-0.03em]">0</div>
-          </div>
-          <div className="rounded-[var(--radius-md)] border border-line px-4 py-3">
-            <div className="text-[11px] text-ink-muted">Last run</div>
-            <div className="mt-1 text-[15px]">Нет запусков</div>
-          </div>
-        </section>
-
         <section className="mt-8">
-          <h2 className="text-[13px] font-medium">Recent tables</h2>
+          <h2 className="text-[13px] font-medium">Недавние таблицы</h2>
           <div className="mt-2 overflow-x-auto rounded-[var(--radius-md)] border border-line">
             <div className="min-w-[760px]">
               <div className="grid grid-cols-[1.6fr_110px_80px_160px] bg-surface-1 px-3 py-2 text-[11px] text-ink-muted">
                 <span>Название</span>
                 <span>Тип</span>
-                <span>Rows</span>
-                <span>Last edited</span>
+                <span>Строки</span>
+                <span>Изменено</span>
               </div>
               {loading
                 ? Array.from({ length: 4 }).map((_, index) => (
@@ -121,27 +93,6 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <div className="mt-8 grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
-          <section>
-            <h2 className="text-[13px] font-medium">Activity</h2>
-            <div className="mt-2 divide-y divide-line rounded-[var(--radius-md)] border border-line">
-              <div className="px-3 py-6 text-[13px] text-ink-muted">Истории списаний пока нет.</div>
-            </div>
-          </section>
-          <section>
-            <h2 className="text-[13px] font-medium">Signals</h2>
-            <div className="mt-2 divide-y divide-line rounded-[var(--radius-md)] border border-line">
-              <div className="px-3 py-6 text-[13px] text-ink-muted">Сигналов пока нет.</div>
-            </div>
-          </section>
-        </div>
-
-        <section className="mt-8">
-          <h2 className="text-[13px] font-medium">Templates</h2>
-          <div className="mt-2 divide-y divide-line rounded-[var(--radius-md)] border border-line">
-            <div className="px-3 py-6 text-[13px] text-ink-muted">Шаблонов пока нет.</div>
-          </div>
-        </section>
       </div>
       <ImportWizard
         open={importOpen}

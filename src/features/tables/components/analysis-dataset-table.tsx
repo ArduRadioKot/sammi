@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ArrowLeft, Download } from "lucide-react";
+import { companyMapUrl } from "@/services/relationship-analysis";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { tablesService } from "@/services/tables";
@@ -29,7 +30,7 @@ export function AnalysisDatasetTable({ table }: { table: TableWithRows }) {
     <div className="flex h-full min-w-0 flex-col bg-surface-0">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
         <div className="min-w-0">
-          <Link to={`/app/tables/${table.relationshipSourceId}/relationship-analysis`}
+          <Link to={companyMapUrl(table.relationshipSourceId)}
             className="inline-flex items-center gap-1 text-xs text-ink-muted hover:text-ink">
             <ArrowLeft className="size-3.5" /> Анализ отношений
           </Link>

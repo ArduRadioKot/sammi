@@ -15,13 +15,11 @@ import { Input } from "@/components/ui/forms";
 import { DEMO_TABLE_ID, ENABLE_DEMO_DATA } from "@/lib/constants/config";
 import { ApiError } from "@/lib/api/errors";
 import { tablesService } from "@/services";
-import { creditsService } from "@/services/credits";
+import { companyMapUrl } from "@/services/relationship-analysis";
 import { enrichmentService } from "@/services/enrichment";
 import { columnCreateConfig, mapApiColumn, STEP3_COLUMN_TYPES, type Step3ColumnType } from "@/services/tables";
-import { useAuthStore } from "@/stores/auth-store";
 import { useTableEditorStore } from "@/stores/table-editor-store";
 import { useUiStore } from "@/stores/ui-store";
-import { useWorkspaceStore } from "@/stores/workspace-store";
 import { AddColumnPopover } from "@/features/tables/components/add-column-popover";
 import { AnalysisDatasetTable } from "@/features/tables/components/analysis-dataset-table";
 import { Spreadsheet } from "@/features/tables/components/spreadsheet";
@@ -89,10 +87,7 @@ export function TableEditor({ tableId }: { tableId: string }) {
   const consumeCommand = useUiStore((s) => s.consumeCommand);
   const reset = useTableEditorStore((s) => s.reset);
   const [errorForId, setErrorForId] = useState<{ id: string; kind: "not-found" | "forbidden" } | null>(null);
-  const [availableCredits, setAvailableCredits] = useState<number | null>(null);
   const [running, setRunning] = useState(false);
-  const workspaceId = useAuthStore((s) => s.workspace?.id);
-  const invalidateCredits = useWorkspaceStore((s) => s.invalidateCredits);
   const isDemo = tableId === DEMO_TABLE_ID && ENABLE_DEMO_DATA;
   const errorKind = errorForId?.id === tableId ? errorForId.kind : null;
 
@@ -332,16 +327,12 @@ export function TableEditor({ tableId }: { tableId: string }) {
       const row = table.rows.find((item) => item.id === rowId);
       return Boolean(identifierText(row?.cells[inputId]?.value));
     });
-    const cost = column?.config?.kind === "enrichment" ? column.config.creditsPerSuccess ?? 1 : 1;
-    return { selected, candidates, cost };
+    return { selected, candidates };
   };
 
   const openRun = (columnId: string) => {
     const column = table.columns.find((item) => item.id === columnId);
     if (!column || column.type !== "enrichment") return;
-    if (workspaceId) {
-      creditsService.getBalance(workspaceId).then((balance) => setAvailableCredits(balance.available)).catch(() => setAvailableCredits(null));
-    }
     const { selected } = runTargetIds(columnId);
     setDrawer({ type: "run-confirm", columnId, limit: selected.length });
   };
@@ -360,19 +351,16 @@ export function TableEditor({ tableId }: { tableId: string }) {
         { column_id: columnId, row_ids: selected },
         crypto.randomUUID(),
       );
-      const released = Math.max(0, result.reserved_credits - result.charged_credits);
       toast.success(
-        `${result.success_count} найдено · ${result.not_found_count} не найдено · ${result.error_count} ошибок · ${result.skipped_count} пропущено · ${result.charged_credits} credits списано · ${released} возвращено`,
+        `${result.success_count} найдено · ${result.not_found_count} не найдено · ${result.error_count} ошибок · ${result.skipped_count} пропущено`,
       );
       const data = await tablesService.getTable(tableId);
       setTable(data);
-      invalidateCredits();
       setDrawer(null);
     } catch (error) {
       selected.forEach((rowId) => updateCell(rowId, columnId, { status: "error" }));
       if (error instanceof ApiError && error.code === "INSUFFICIENT_CREDITS") {
-        const details = error.details as { needed?: number; available?: number } | null;
-        toast.error(`Не хватает credits. Нужно: ${details?.needed ?? "—"} · Доступно: ${details?.available ?? "—"}`);
+        toast.error("Лимит обогащения исчерпан. Обратитесь к администратору.");
       } else if (error instanceof ApiError && error.code === "ENRICHMENT_PROVIDER_NOT_CONFIGURED") {
         toast.error("DaData не настроен. Задайте DADATA_API_KEY на backend.");
       } else if (error instanceof ApiError && error.code === "ENRICHMENT_ASYNC_REQUIRED") {
@@ -416,8 +404,8 @@ export function TableEditor({ tableId }: { tableId: string }) {
         <div className="flex items-center gap-2">
           {!isDemo && (
             <Button variant="secondary" size="sm" asChild>
-              <Link to={`/app/tables/${tableId}/relationship-analysis`} aria-label="Анализ отношений">
-                <Network /><span className="hidden md:inline">Анализ отношений</span>
+              <Link to={companyMapUrl(tableId)} aria-label="Анализ">
+                <Network /><span className="hidden md:inline">Анализ</span>
               </Link>
             </Button>
           )}
@@ -576,13 +564,6 @@ export function TableEditor({ tableId }: { tableId: string }) {
         onOpenChange={(open) => !open && setDrawer(null)}
         rows={drawer?.type === "run-confirm" ? runTargetIds(drawer.columnId).selected.length : 0}
         candidates={drawer?.type === "run-confirm" ? runTargetIds(drawer.columnId).candidates.length : 0}
-        maxReservation={
-          drawer?.type === "run-confirm"
-            ? runTargetIds(drawer.columnId).candidates.length * runTargetIds(drawer.columnId).cost
-            : 0
-        }
-        costPerSuccess={drawer?.type === "run-confirm" ? runTargetIds(drawer.columnId).cost : 1}
-        availableCredits={availableCredits}
         running={running}
         onConfirm={() => {
           if (drawer?.type === "run-confirm") void executeRun(drawer.columnId);

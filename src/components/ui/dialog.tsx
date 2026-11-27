@@ -62,10 +62,10 @@ export function Sheet({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-[rgba(27,27,26,0.18)]" />
         <DialogPrimitive.Content
-          className="fixed top-0 right-0 z-50 flex h-full flex-col border-l border-line bg-surface-0 shadow-[var(--shadow-float)]"
+          className="fixed top-0 right-0 z-50 flex h-dvh flex-col border-l border-line bg-surface-0 shadow-[var(--shadow-float)]"
           style={{ width: `min(${width}px, 100%)` }}
         >
-          <div className="flex h-12 items-center justify-between border-b border-line px-4">
+          <div className="flex h-12 shrink-0 items-center justify-between border-b border-line px-4">
             <div>
               <DialogPrimitive.Title className="text-[14px] font-medium">
                 {title}

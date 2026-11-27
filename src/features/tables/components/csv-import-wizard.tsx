@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { companyMapUrl } from "@/services/relationship-analysis";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -493,7 +494,7 @@ export function ImportWizard({
                 onImported?.(result.table_id);
                 if (mode === "workspace") {
                   const destination = `/app/tables/${result.table_id}`;
-                  navigate(analyzeAfterImport ? `${destination}/relationship-analysis` : destination);
+                  navigate(analyzeAfterImport ? companyMapUrl(result.table_id) : destination);
                 }
               }}
             >

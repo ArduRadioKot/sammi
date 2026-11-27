@@ -1,6 +1,7 @@
 import { formatDistanceToNow } from "date-fns";
 import { ru as ruLocale } from "date-fns/locale";
 import { useEffect, useState } from "react";
+import { companyMapUrl } from "@/services/relationship-analysis";
 import { Link } from "react-router-dom";
 import { Sheet } from "@/components/ui/dialog";
 import { ContactRecommendation, useContactAnalysisCard } from "@/features/relationship/contact-recommendation";
@@ -47,7 +48,7 @@ export function RowDetails({
           </div>
         </div>
         {tableId && <ContactRecommendation result={result} />}
-        {tableId && <Link className="text-sm text-accent underline" to={`/app/tables/${tableId}/relationship-analysis`}>Открыть анализ отношений</Link>}
+        {tableId && <Link className="text-sm text-accent underline" to={companyMapUrl(tableId)}>Открыть анализ отношений</Link>}
       </div>
     </Sheet>
   );
@@ -114,10 +115,6 @@ export function CellDetails({
               ? formatDistanceToNow(new Date(provenance.retrieved_at), { addSuffix: true, locale: ruLocale })
               : "—"}
           </div>
-        </div>
-        <div>
-          <div className="text-[11px] text-ink-faint uppercase">Credits</div>
-          <div className="mt-1">{provenance?.credits_charged ?? local?.credits ?? 0}</div>
         </div>
         {cell?.error && (
           <div className="rounded-[var(--radius-sm)] bg-danger-soft p-2 text-danger">{cell.error.message}</div>

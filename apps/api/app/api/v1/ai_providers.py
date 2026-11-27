@@ -14,12 +14,10 @@ from app.schemas.ai import (
     AIProviderTestRequest,
     AIProviderTestResponse,
 )
-from app.services.ai_providers import AIProviderStatusService, get_ai_registry
+from app.services.ai_providers import AIProviderStatusService
+from app.services.assistant_generation import generate_assistant
 
 router = APIRouter(prefix="/system/ai", tags=["ai"])
-
-ASSISTANT_SYSTEM_PROMPT = """Ты — ИИ-помощник по рабочим задачам внутри CRM Sammi. Отвечай по-русски, если пользователь не попросил другой язык. Помогай анализировать клиентов, готовить встречи и письма, структурировать заметки, планировать следующие шаги и объяснять данные. Не утверждай, что выполнил действие в CRM или получил доступ к данным, которых нет в переписке. Если контекста недостаточно — уточни его. Пиши конкретно и по делу."""
-
 
 @router.post("/chat", response_model=AIChatResponse)
 async def chat(payload: AIChatRequest, _user: User = Depends(get_current_user)) -> AIChatResponse:
@@ -28,18 +26,7 @@ async def chat(payload: AIChatRequest, _user: User = Depends(get_current_user)) 
         raise AppError("AI_CHAT_INVALID_ROLE", "Сообщения должны быть от пользователя или помощника.", 422)
     if messages[-1]["role"] != "user":
         raise AppError("AI_CHAT_INVALID_TURN", "Последнее сообщение должно содержать вопрос.", 422)
-    provider = get_ai_registry().get("ollama")
-    if provider is None or not provider.is_configured():
-        raise AppError("AI_PROVIDER_NOT_CONFIGURED", "Локальная модель Ollama не настроена.", 503)
-    if not provider.capabilities().generation:
-        raise AppError("AI_PROVIDER_ERROR", "У Ollama отключена генерация.", 501)
-    result = await provider.generate(
-        model=payload.model,
-        messages=messages,
-        system=ASSISTANT_SYSTEM_PROMPT,
-        temperature=0.35,
-    )
-    return AIChatResponse(content=result.content, model=result.model, duration_ms=result.duration_ms)
+    return await generate_assistant(messages, requested_model=payload.model)
 
 
 @router.get("/providers", response_model=AIProviderListResponse)

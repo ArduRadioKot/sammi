@@ -94,6 +94,8 @@ class OllamaProvider(ProviderMixin):
         prompt: str | None = None,
         temperature: float | None = None,
         system: str | None = None,
+        think: bool | None = None,
+        num_predict: int | None = None,
     ) -> AIGenerationResult:
         return await self._chat(
             model=model,
@@ -101,6 +103,8 @@ class OllamaProvider(ProviderMixin):
             prompt=prompt,
             temperature=temperature,
             system=system,
+            think=think,
+            num_predict=num_predict,
         )
 
     async def generate_structured(

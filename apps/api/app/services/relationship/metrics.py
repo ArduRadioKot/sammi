@@ -331,7 +331,8 @@ def build_report(
         covered_key_contacts=covered, key_contacts=len(key_contacts),
         covered_key_roles=covered_roles, key_roles=roles,
         relationship_score=round(sum(health_scores) / len(health_scores), 2) if health_scores else None,
-        relationships=relationships, connections=corpus.relationships, account_risks=_unique_findings(risks, 15),
+        relationships=relationships, connections=corpus.relationships, public_connections=corpus.public_connections,
+        account_risks=_unique_findings(risks, 15),
         alerts=_unique_findings(alerts, 20), review=corpus.review,
         publications=publication_statuses(corpus),
         recordings=[
@@ -347,7 +348,7 @@ def build_report(
 
 def publication_statuses(corpus: Corpus) -> list[PublicationStatus]:
     return [PublicationStatus(id=item.id, label=item.label, url=item.url, state=item.state,
-                              reason=item.reason, retryable=item.retryable)
+                              reason=item.reason, retryable=item.retryable, search_provider=item.search_provider)
             for item in corpus.publications[-60:]]
 
 

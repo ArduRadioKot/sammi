@@ -23,6 +23,7 @@ export interface AnalysisPublications {
   feed_urls: string[];
   refresh_hours: RefreshHours;
   web_search?: boolean;
+  search_keywords?: string[];
 }
 
 export interface PublicationStatus {
@@ -32,6 +33,7 @@ export interface PublicationStatus {
   state: "pending" | "included" | "review" | "rejected" | "unavailable" | "blocked";
   reason: string | null;
   retryable: boolean;
+  search_provider?: "searxng" | "wikipedia" | "sitemap" | null;
 }
 
 export interface FeedStatus {
@@ -50,6 +52,13 @@ export interface WebSearchStatus {
   discovered: number;
   checked_at: string | null;
   reason: string | null;
+  keywords?: string[];
+  queries?: number;
+  failed_queries?: number;
+  wikipedia_queries?: number;
+  wikipedia_discovered?: number;
+  sitemap_queries?: number;
+  sitemap_discovered?: number;
 }
 
 export interface RecordingStatus {
@@ -157,6 +166,7 @@ export interface AnalysisReport {
   key_roles: number | null;
   relationship_score: number | null;
   relationships: Finding[];
+  public_connections?: Array<{ id: string; from_id: string; to_id: string; finding: Finding }>;
   connections: Array<{ from_id: string; to_id: string; scope: string; source_id: string }>;
   account_risks: Finding[];
   alerts: Finding[];
@@ -190,6 +200,21 @@ export interface AnalysisRun {
   refresh_hours: RefreshHours;
   next_refresh_at: string | null;
   datasets: AnalysisDataset[];
+}
+
+export type AnalysisMapSummary = {
+  table_id: string;
+  table_name: string;
+  company: string;
+  status: AnalysisRun["status"];
+};
+
+export function companyMapUrl(tableId?: string, selection?: { contact?: string; row?: string }) {
+  if (!tableId) return "/app/companies";
+  const params = new URLSearchParams({ analysis: tableId });
+  if (selection?.contact) params.set("contact", selection.contact);
+  if (selection?.row) params.set("row", selection.row);
+  return `/app/companies?${params}`;
 }
 
 export interface AnalysisSetup {
@@ -226,6 +251,8 @@ const reviewPath = (tableId: string, runId: string, sourceId: string) =>
   `${path(tableId)}/${runId}/reviews/${encodeURIComponent(sourceId)}`;
 
 export const relationshipAnalysis = {
+  maps: (workspaceId: string, signal?: AbortSignal) =>
+    apiClient.get<AnalysisMapSummary[]>(`/api/v1/workspaces/${workspaceId}/relationship-maps`, signal),
   setup: (tableId: string, signal?: AbortSignal) => apiClient.get<AnalysisSetup>(`${path(tableId)}/setup`, signal),
   status: (tableId: string, signal?: AbortSignal) => apiClient.get<AnalysisRun | null>(path(tableId), signal),
   start(tableId: string, columns: ColumnMapping, documents: AnalysisDocument[], publications: AnalysisPublications) {
@@ -242,6 +269,8 @@ export const relationshipAnalysis = {
     return apiClient.postForm<AnalysisRun>(path(tableId), form);
   },
   remove: (tableId: string) => apiClient.delete<void>(path(tableId)),
+  restartSearch: (tableId: string, keywords: string[], urls: string[]) =>
+    apiClient.post<AnalysisRun>(`${path(tableId)}/search`, { keywords, urls }),
   retry: (tableId: string) => apiClient.post<AnalysisRun>(`${path(tableId)}/retry`),
   publish: (tableId: string, runId: string) =>
     apiClient.post<{ columns: string[]; updated_rows: number; datasets: AnalysisDataset[] }>(`${path(tableId)}/${runId}/publish`),

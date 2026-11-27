@@ -9,13 +9,17 @@ const COLUMN_STEP = CARD.width + 72;
 const ROW_STEP = CARD.height + 65;
 const LEFT = 26;
 const TOP = 52;
-const PER_ROW = 3;
 const ROLE_LEVEL: Record<StakeholderContact["role"], number> = {
   decision_maker: 0, actual_decider: 0, influencer: 1, initiator: 1, technical_expert: 1, procurement: 1,
   user: 2, unknown: 2,
 };
 
-export function layoutGraph(contacts: StakeholderContact[], edges: StakeholderEdge[], departments: readonly string[]) {
+export function layoutGraph(contacts: StakeholderContact[], edges: StakeholderEdge[], departments: readonly string[], compact = false) {
+  const perRow = compact ? 1 : 3;
+  const rowStep = compact ? CARD.height + 28 : ROW_STEP;
+  const top = compact ? 28 : TOP;
+  const lateralInset = compact ? 48 : LEFT;
+  const rightInset = compact ? 48 : 90;
   const people = new Map(contacts.map((contact) => [contact.id, contact]));
   const managers = new Map<string, string[]>();
   for (const edge of edges) {
@@ -46,26 +50,26 @@ export function layoutGraph(contacts: StakeholderContact[], edges: StakeholderEd
   }
 
   const nodes = new Map<string, Node>();
-  const columns = Math.max(1, ...[...groups.values()].map((group) => Math.min(PER_ROW, group.length)));
+  const columns = Math.max(1, ...[...groups.values()].map((group) => Math.min(perRow, group.length)));
   const cardsWidth = CARD.width + (columns - 1) * COLUMN_STEP;
   const departmentOrder = new Map(departments.map((name, index) => [name, index]));
   let row = 0;
   for (const [, group] of [...groups.entries()].sort(([a], [b]) => a - b)) {
     group.sort((a, b) => (departmentOrder.get(a.department) ?? 0) - (departmentOrder.get(b.department) ?? 0)
       || ROLE_LEVEL[a.role] - ROLE_LEVEL[b.role] || a.name.localeCompare(b.name, "ru"));
-    for (let offset = 0; offset < group.length; offset += PER_ROW) {
-      const line = group.slice(offset, offset + PER_ROW);
+    for (let offset = 0; offset < group.length; offset += perRow) {
+      const line = group.slice(offset, offset + perRow);
       const xOffset = (cardsWidth - (CARD.width + (line.length - 1) * COLUMN_STEP)) / 2;
       line.forEach((contact, column) => nodes.set(contact.id, {
-        x: LEFT + xOffset + CARD.width / 2 + column * COLUMN_STEP,
-        y: TOP + CARD.height / 2 + row * ROW_STEP,
+        x: lateralInset + xOffset + CARD.width / 2 + column * COLUMN_STEP,
+        y: top + CARD.height / 2 + row * rowStep,
         row, column, contact,
       }));
       row++;
     }
   }
 
-  return { nodes, size: { width: LEFT + cardsWidth + 90, height: TOP + Math.max(0, row - 1) * ROW_STEP + CARD.height + 36 } };
+  return { nodes, size: { width: lateralInset + cardsWidth + rightInset, height: top + Math.max(0, row - 1) * rowStep + CARD.height + (compact ? 28 : 36) } };
 }
 
 export function routeEdges(edges: StakeholderEdge[], nodes: Map<string, Node>) {

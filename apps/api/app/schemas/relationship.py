@@ -10,6 +10,7 @@ Role = Literal["decision_maker", "influencer", "actual_decider", "unknown"]
 Trend = Literal["improving", "stable", "declining", "unknown"]
 OUTPUT_CONFIG_KEY = "relationship_output"
 ShortText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
+SearchKeyword = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 
 FIELD_ALIASES = {
     "name": ("name", "full_name", "contact_name", "контакт", "имя", "фио"),
@@ -59,6 +60,7 @@ class AnalysisRequest(BaseModel):
     )
     fetch_csv_urls: bool = False
     web_search: bool = False
+    search_keywords: list[SearchKeyword] = Field(default_factory=list, max_length=8)
     feed_urls: list[Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]] = Field(
         default_factory=list, max_length=4,
     )
@@ -179,6 +181,14 @@ class RelationshipApproval(BaseModel):
     proposal_id: Annotated[str, StringConstraints(min_length=1, max_length=120)]
 
 
+class SearchRefreshRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    keywords: list[SearchKeyword] = Field(default_factory=list, max_length=8)
+    urls: list[Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)]] = Field(
+        default_factory=list, max_length=8,
+    )
+
+
 class PublicationStatus(BaseModel):
     id: str
     label: str
@@ -186,6 +196,7 @@ class PublicationStatus(BaseModel):
     state: Literal["pending", "included", "review", "rejected", "unavailable", "blocked"] = "pending"
     reason: str | None = None
     retryable: bool = False
+    search_provider: Literal["searxng", "wikipedia", "sitemap"] | None = None
 
 
 class LinkedPublication(PublicationStatus):
@@ -211,6 +222,13 @@ class WebSearchStatus(BaseModel):
     discovered: int = 0
     checked_at: datetime | None = None
     reason: str | None = None
+    keywords: list[SearchKeyword] = Field(default_factory=list, max_length=8)
+    queries: int = 0
+    failed_queries: int = 0
+    wikipedia_queries: int = 0
+    wikipedia_discovered: int = 0
+    sitemap_queries: int = 0
+    sitemap_discovered: int = 0
 
 
 class RecordingStatus(BaseModel):
@@ -229,12 +247,20 @@ class Recording(RecordingStatus):
     suffix: str = ".wav"
 
 
+class PublicConnection(BaseModel):
+    id: str
+    from_id: str
+    to_id: str
+    finding: Finding
+
+
 class Corpus(BaseModel):
     company: str
     collected_at: datetime
     contacts: list[Contact]
     sources: list[Source]
     relationships: list[Relationship]
+    public_connections: list[PublicConnection] = Field(default_factory=list)
     review: list[ReviewItem]
     publications: list[LinkedPublication] = Field(default_factory=list)
     review_sources: dict[str, Source] = Field(default_factory=dict)
@@ -313,6 +339,7 @@ class AnalysisReport(BaseModel):
     relationship_score: float | None
     relationships: list[Finding]
     connections: list[Relationship]
+    public_connections: list[PublicConnection] = Field(default_factory=list)
     account_risks: list[Finding]
     alerts: list[Finding]
     review: list[ReviewItem]
@@ -371,6 +398,13 @@ class ContactCard(BaseModel):
     contact: ContactAnalysis
     generated_at: datetime
     stale: bool
+
+
+class AnalysisMapSummary(BaseModel):
+    table_id: uuid.UUID
+    table_name: str
+    company: str
+    status: str
 
 
 class AskRequest(BaseModel):

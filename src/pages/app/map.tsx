@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
+import { useNavigate } from "react-router-dom";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Map as MapIcon, RefreshCw } from "lucide-react";
@@ -6,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/forms";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ApiError } from "@/lib/api/client";
+import { companyMapUrl } from "@/services/relationship-analysis";
 import { mapService } from "@/services/map";
 import { tablesService } from "@/services/tables";
 import type { ColumnDefinition, DataTable, TableMapPoints } from "@/types/domain";
@@ -17,7 +19,8 @@ function sourceLabel(source: TableMapPoints["source"], geocoded: number, cached:
   return null;
 }
 
-function MapCanvas({ points }: { points: TableMapPoints["points"] }) {
+function MapCanvas({ points, tableId }: { points: TableMapPoints["points"]; tableId: string }) {
+  const navigate = useNavigate();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -41,7 +44,7 @@ function MapCanvas({ points }: { points: TableMapPoints["points"] }) {
     const map = L.map(containerRef.current, {
       center: [55.7558, 37.6173],
       zoom: 10,
-      scrollWheelZoom: true,
+      scrollWheelZoom: false,
       attributionControl: true,
     });
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -100,7 +103,8 @@ function MapCanvas({ points }: { points: TableMapPoints["points"] }) {
         fillOpacity: 0.88,
         weight: 2,
       })
-        .bindPopup(text)
+        .bindTooltip(text, { direction: "top" })
+        .on("click", () => navigate(companyMapUrl(tableId, { row: point.rowId })))
         .addTo(layer);
     }
     if (bounds) {
@@ -109,7 +113,7 @@ function MapCanvas({ points }: { points: TableMapPoints["points"] }) {
         maxZoom: 16,
       });
     }
-  }, [points, bounds]);
+  }, [points, bounds, tableId, navigate]);
 
   return <div ref={containerRef} className="h-full w-full" />;
 }
@@ -224,7 +228,7 @@ export default function MapPage() {
   }
 
   return (
-    <div className="flex h-full flex-col gap-4 p-5">
+    <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto overscroll-y-contain p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-[22px] font-medium tracking-[-0.03em]">Карта контактов</h1>
@@ -302,7 +306,7 @@ export default function MapPage() {
           </div>
         )}
         {payload && payload.points.length > 0 ? (
-          <MapCanvas points={payload.points} />
+          <MapCanvas points={payload.points} tableId={payload.tableId} />
         ) : !mapLoading && payload === null ? (
           <div className="grid h-full place-items-center">
             {tables.length > 0 && (

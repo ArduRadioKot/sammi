@@ -1,6 +1,6 @@
 export type StakeholderRole = "decision_maker" | "influencer" | "actual_decider" | "initiator" | "user" | "technical_expert" | "procurement" | "unknown";
 export type StakeholderPosition = "supportive" | "neutral" | "skeptical" | "unknown";
-export type RelationshipType = "reports_to" | "influences" | "collaborates_with" | "introduced_by";
+export type RelationshipType = "reports_to" | "influences" | "collaborates_with" | "introduced_by" | "shared_event";
 export type Confidence = "verified" | "inferred" | "unknown";
 export type InteractionType = "meeting" | "call" | "email" | "event" | "note";
 

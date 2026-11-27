@@ -13,7 +13,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.schemas.relationship import (
     AnalysisAnswer, AnalysisRead, AnalysisRequest, AnalysisSetup, AskRequest, ContactCard, PublishedAnalysis,
-    PublicationReviewRequest, RefreshRequest, RelationshipApproval, ReviewPreview,
+    PublicationReviewRequest, RefreshRequest, RelationshipApproval, ReviewPreview, SearchRefreshRequest,
 )
 from app.services.relationship.audio import is_recording
 from app.services.relationship.prepare import Document
@@ -104,6 +104,12 @@ async def retry(table_id: UUID, user: User = Depends(get_current_user),
 async def refresh(table_id: UUID, body: RefreshRequest, user: User = Depends(get_current_user),
                   session: AsyncSession = Depends(get_db)) -> AnalysisRead:
     return await AnalysisService(session).update_refresh(table_id, user, body)
+
+
+@router.post("/search", response_model=AnalysisRead, status_code=202)
+async def run_search(table_id: UUID, body: SearchRefreshRequest, user: User = Depends(get_current_user),
+                     session: AsyncSession = Depends(get_db)) -> AnalysisRead:
+    return await AnalysisService(session).restart_search(table_id, user, body)
 
 
 @router.get("/contacts/by-row/{row_id}", response_model=ContactCard | None)

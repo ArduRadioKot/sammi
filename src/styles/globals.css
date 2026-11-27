@@ -214,7 +214,7 @@ body {
 }
 
 .stakeholder-page {
-  --stakeholder-canvas: color-mix(in srgb, var(--surface-1) 76%, var(--bg));
+  --stakeholder-canvas: color-mix(in srgb, var(--surface-1) 35%, var(--bg));
   --stakeholder-reports: var(--accent);
   --stakeholder-influence: color-mix(in srgb, var(--accent) 60%, var(--ink));
   --stakeholder-collaboration: var(--ink-muted);
@@ -410,6 +410,8 @@ body {
   .stakeholder-body { overflow: auto; }
   .stakeholder-graph-wrap { min-height: clamp(320px, 56dvh, 540px); }
   .stakeholder-detail { max-height: 54dvh; }
+  .relationship-embedded-map .stakeholder-graph-wrap { min-height: 0; }
+  .relationship-embedded-map .stakeholder-graph { touch-action: pan-y; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -15,6 +15,7 @@ from app.services.relationship.text import MAX_FILE_BYTES, read_document, read_p
 MAX_REMOTE_PUBLICATIONS = 40
 DOWNLOAD_CONCURRENCY = 4
 DOWNLOAD_TIMEOUT = 12
+MAX_SEARCH_PUBLICATIONS = 60
 MAX_REDIRECTS = 3
 DOMAIN = re.compile(r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?")
 PUBLIC_IPV6 = ip_network("2000::/3")
@@ -57,17 +58,17 @@ def publication_url(value: str) -> str:
     raise PublicationError("Для загрузки нужна HTTPS-ссылка на публичный сайт.", blocked=True)
 
 
-async def _resolve(host: str) -> str:
+async def _resolve(host: str) -> list[str]:
     try:
         records = await asyncio.get_running_loop().getaddrinfo(
             host + ".", 443, type=socket.SOCK_STREAM, proto=socket.IPPROTO_TCP,
         )
     except socket.gaierror as exc:
         raise PublicationError("Домен не удалось найти.", retryable=exc.errno == socket.EAI_AGAIN) from exc
-    addresses = {ip_address(record[4][0]) for record in records}
+    addresses = list(dict.fromkeys(ip_address(record[4][0]) for record in records))
     if not addresses or any(not _is_public(address) for address in addresses):
         raise PublicationError("Сайт разрешается в непубличный адрес.", blocked=True)
-    return str(min(addresses, key=lambda address: (address.version, int(address))))
+    return [str(address) for address in addresses]
 
 
 def _is_public(address) -> bool:
@@ -105,31 +106,40 @@ async def download_resource(value: str, allowed: set[str]) -> tuple[str, str, st
     current = publication_url(value)
     for attempt in range(MAX_REDIRECTS + 1):
         origin = httpx.URL(current)
-        address = await _resolve(origin.host)
+        addresses = await _resolve(origin.host)
         host = origin.raw_host.decode("ascii")
-        # Connect to the validated IP. TLS and the Host header still identify the publication host.
-        request = httpx.Request(
-            "GET", origin.copy_with(host=address),
-            headers={
-                "Host": host,
-                "Accept": ", ".join(sorted(allowed)),
-                "Accept-Encoding": "identity",
-                "User-Agent": "Sammi-Publication-Reader/1.0",
-            },
-            extensions={"sni_hostname": host, "timeout": {"connect": 4.0, "read": 5.0, "write": 5.0, "pool": 4.0}},
-        )
-        async with httpx.AsyncHTTPTransport(trust_env=False) as transport:
-            response = await transport.handle_async_request(request)
-            try:
-                if response.status_code not in REDIRECTS:
-                    content_type, encoding, contents = await _read_response(response, allowed)
-                    return current, content_type, encoding, contents
-                location = response.headers.get("location")
-                if not location or attempt == MAX_REDIRECTS:
-                    raise PublicationError("Сайт вернул неполное перенаправление или слишком много переходов.")
-                current = publication_url(str(origin.join(location)))
-            finally:
-                await response.aclose()
+        connection_error: Exception | None = None
+        for address in addresses[:3]:
+            # Retry alternative public addresses for the same DNS answer while retaining TLS hostname validation.
+            request = httpx.Request(
+                "GET", origin.copy_with(host=address),
+                headers={
+                    "Host": host,
+                    "Accept": ", ".join(sorted(allowed)),
+                    "Accept-Encoding": "identity",
+                    "User-Agent": "Sammi-Publication-Reader/1.0",
+                },
+                extensions={"sni_hostname": host, "timeout": {"connect": 2.5, "read": 5.0, "write": 5.0, "pool": 3.0}},
+            )
+            async with httpx.AsyncHTTPTransport(trust_env=False) as transport:
+                try:
+                    response = await transport.handle_async_request(request)
+                except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+                    connection_error = exc
+                    continue
+                try:
+                    if response.status_code not in REDIRECTS:
+                        content_type, encoding, contents = await _read_response(response, allowed)
+                        return current, content_type, encoding, contents
+                    location = response.headers.get("location")
+                    if not location or attempt == MAX_REDIRECTS:
+                        raise PublicationError("Сайт вернул неполное перенаправление или слишком много переходов.")
+                    current = publication_url(str(origin.join(location)))
+                    break
+                finally:
+                    await response.aclose()
+        else:
+            raise PublicationError("Не удалось соединиться с публичными адресами сайта.", retryable=True) from connection_error
     raise AssertionError("redirect loop bounds")
 
 

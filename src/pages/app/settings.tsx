@@ -1,34 +1,31 @@
 import { useEffect, useState } from "react";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
+import { usePreferences } from "@/stores/preferences-store";
+import { selectClass } from "@/features/relationship/analysis-setup";
 import { useTheme } from "@/lib/theme/theme-provider";
-import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input, Label } from "@/components/ui/forms";
 import { Switch } from "@/components/ui/controls";
 import { ApiError } from "@/lib/api/errors";
 import { getBackendHealth } from "@/services/system/health";
-import { checkAIProvider, listAIProviderModels, listAIProviders, testAIProvider, type AIProviderModel, type AIProviderStatus } from "@/services/system/ai-providers";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUiStore } from "@/stores/ui-store";
-import { enrichmentService, type EnrichmentProviderStatus } from "@/services/enrichment";
 
-const SECTIONS = [
-  "Система",
-  "Рабочее пространство",
-  "Участники",
-  "ИИ-модель",
-  "Источники данных",
-  "Безопасность",
-  "Внешний вид",
-] as const;
+const SECTIONS = {
+  system: "Система",
+  account: "Аккаунт",
+  analysis: "Анализ клиентов",
+  assistant: "ИИ-помощник",
+  appearance: "Внешний вид",
+} as const;
+
+type Section = keyof typeof SECTIONS;
 
 type ConnectionState = "checking" | "connected" | "degraded" | "disconnected";
 
 function StatusRow({ label, state }: { label: string; state: ConnectionState }) {
   const tone =
     state === "connected" ? "bg-success" : state === "checking" ? "bg-warning" : state === "degraded" ? "bg-warning" : "bg-danger";
-  const text =
-    state === "checking" ? "Checking" : state === "connected" ? "Connected" : state === "degraded" ? "Degraded" : "Disconnected";
+  const text = { checking: "Проверяем", connected: "Подключён", degraded: "Частично доступен", disconnected: "Недоступен" }[state];
   return (
     <div className="flex items-center justify-between border-b border-line py-3 text-[13px]">
       <span>{label}</span>
@@ -67,7 +64,7 @@ function SystemStatus() {
 
   return (
     <div className="max-w-lg">
-      <h1 className="text-[18px] font-medium">Система</h1>
+      <h2 className="text-lg font-medium">Система</h2>
       <p className="mt-1 text-[13px] text-ink-muted">Подключение к приложению и базе данных.</p>
       <div className="mt-4">
         <StatusRow label="Backend" state={backend} />
@@ -77,253 +74,86 @@ function SystemStatus() {
   );
 }
 
-const PROVIDER_LABELS: Record<string, string> = {
-  ollama: "Ollama",
-  yandex: "Yandex AI Studio",
-  gigachat: "GigaChat",
-};
-
-function AIProvidersStatus() {
-  const [items, setItems] = useState<AIProviderStatus[] | null>(null);
-  const [checking, setChecking] = useState<string | null>(null);
-  const [testing, setTesting] = useState(false);
-  const [models, setModels] = useState<AIProviderModel[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>("");
-  const [modelsMessage, setModelsMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    const controller = new AbortController();
-    listAIProviders(controller.signal)
-      .then((payload) => setItems(payload.providers))
-      .catch(() => setItems([]));
-    return () => controller.abort();
-  }, []);
-
-  const ollama = (items ?? []).find((item) => item.id === "ollama");
-  const ollamaAvailable = Boolean(ollama?.available);
-
-  useEffect(() => {
-    if (!ollamaAvailable) return;
-    const controller = new AbortController();
-    listAIProviderModels("ollama", controller.signal)
-      .then((payload) => {
-        setModels(payload.items);
-        const fallback =
-          ollama?.default_model && payload.items.some((item) => item.id === ollama.default_model)
-            ? ollama.default_model
-            : payload.items[0]?.id ?? "";
-        setSelectedModel(fallback);
-        setModelsMessage(payload.items.length === 0 ? "Ollama запущен, но модели не установлены." : null);
-      })
-      .catch(() => {
-        setModels([]);
-        setSelectedModel("");
-        setModelsMessage("Ollama недоступен.");
-      });
-    return () => controller.abort();
-  }, [ollamaAvailable, ollama?.default_model]);
-
-  const installedModels = ollamaAvailable ? models : [];
-  const installedMessage = !ollama
-    ? null
-    : ollamaAvailable
-      ? modelsMessage
-      : "Ollama недоступен.";
-
-  const test = async (id: string) => {
-    setChecking(id);
-    try {
-      const result = await checkAIProvider(id);
-      setItems((current) =>
-        (current ?? []).map((item) => (item.id === id ? { ...item, configured: true, available: result.available } : item)),
-      );
-      toast.success(`${PROVIDER_LABELS[id] ?? id}: available`);
-    } catch (error) {
-      const message = error instanceof ApiError ? error.message : "Unavailable";
-      setItems((current) =>
-        (current ?? []).map((item) => (item.id === id ? { ...item, available: false } : item)),
-      );
-      toast.error(`${PROVIDER_LABELS[id] ?? id}: ${message}`);
-    } finally {
-      setChecking(null);
-    }
-  };
-
-  const testGeneration = async () => {
-    setTesting(true);
-    try {
-      const result = await testAIProvider("ollama", selectedModel || undefined);
-      toast.success(`Ollama ${result.model}: ${result.status}${result.duration_ms != null ? ` · ${result.duration_ms} ms` : ""}`);
-    } catch (error) {
-      const message = error instanceof ApiError ? error.message : "Generation failed";
-      toast.error(`Ollama: ${message}`);
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  return (
-    <div className="max-w-xl space-y-4">
-      <h1 className="text-[18px] font-medium">ИИ-модель</h1>
-      <p className="text-[13px] text-ink-muted">Генерация проходит на сервере через локальную Ollama. Секреты провайдеров хранятся только в backend.</p>
-      {(items ?? []).map((item) => (
-        <section key={item.id} className="rounded-[var(--radius-md)] border border-line p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-[13px] font-medium">{PROVIDER_LABELS[item.id] ?? item.id}</div>
-            <span className="text-right text-[12px] text-ink-muted">
-              {item.configured ? "Настроен" : "Не настроен"}
-              {" · "}
-              {item.available ? "Доступен" : "Недоступен"}
-            </span>
-          </div>
-          {item.id === "ollama" ? (
-            <div className="mt-3 space-y-3 text-[13px]">
-              <div className="flex justify-between gap-3 text-ink-muted">
-                <span>Endpoint</span>
-                <span className="font-mono text-[12px]">{item.endpoint ?? "—"}</span>
-              </div>
-              <div className="flex justify-between gap-3 text-ink-muted">
-                <span>Модель по умолчанию</span>
-                <span>{item.default_model || "не задан"}</span>
-              </div>
-                <div>
-                <div className="mb-1 text-[12px] text-ink-muted">Установленные модели</div>
-                {installedModels.length > 0 ? (
-                <Select value={selectedModel} onValueChange={setSelectedModel} disabled={!item.available}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Выберите модель" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {installedModels.map((model) => (
-                      <SelectItem key={model.id} value={model.id}>
-                        {model.name}
-                        {model.parameter_size ? ` · ${model.parameter_size}` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                ) : (
-                  <p className="text-[12px] text-ink-muted">{installedMessage ?? "Модели не загружены."}</p>
-                )}
-                {installedModels.length > 0 && installedMessage ? <p className="mt-2 text-[12px] text-ink-muted">{installedMessage}</p> : null}
-              </div>
-            </div>
-          ) : null}
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={!item.configured || checking === item.id}
-              onClick={() => void test(item.id)}
-            >
-                {checking === item.id ? "Проверяем…" : "Проверить соединение"}
-            </Button>
-            {item.capabilities?.generation ? (
-              <Button
-                size="sm"
-                disabled={!item.available || installedModels.length === 0 || testing}
-                onClick={() => void testGeneration()}
-              >
-                {testing ? "Проверяем…" : "Проверить генерацию"}
-              </Button>
-            ) : null}
-          </div>
-        </section>
-      ))}
-      {items?.length === 0 ? <p className="text-[13px] text-ink-muted">Не удалось загрузить статус провайдеров.</p> : null}
-    </div>
-  );
-}
-
 export default function SettingsPage() {
-  const [section, setSection] = useState<(typeof SECTIONS)[number]>("Система");
+  const [params, setParams] = useSearchParams();
+  const requested = params.get("section");
+  const section = requested && Object.hasOwn(SECTIONS, requested) ? requested as Section : "system";
   const { theme, setTheme } = useTheme();
-  const reduceTransparency = useUiStore((s) => s.reduceTransparency);
-  const setReduceTransparency = useUiStore((s) => s.setReduceTransparency);
-  const user = useAuthStore((s) => s.user);
-  const workspace = useAuthStore((s) => s.workspace);
-  const [dataProviders, setDataProviders] = useState<EnrichmentProviderStatus[] | null>(null);
-
-  useEffect(() => {
-    if (section !== "Источники данных") return;
-    const controller = new AbortController();
-    enrichmentService.listProviders(controller.signal).then((result) => setDataProviders(result.items)).catch(() => {
-      if (!controller.signal.aborted) setDataProviders([]);
-    });
-    return () => controller.abort();
-  }, [section]);
+  const reduceTransparency = useUiStore((state) => state.reduceTransparency);
+  const setReduceTransparency = useUiStore((state) => state.setReduceTransparency);
+  const user = useAuthStore((state) => state.user);
+  const workspace = useAuthStore((state) => state.workspace);
+  const preferences = usePreferences();
+  if (requested === "model") return <Navigate to="/app/integrations#ollama" replace />;
+  if (requested === "sources") return <Navigate to="/app/integrations#dadata" replace />;
 
   return (
-    <div className="flex h-full">
-      <aside className="w-52 border-r border-line p-3">
-        {SECTIONS.map((item) => (
-          <button
-            key={item}
-            type="button"
-            onClick={() => setSection(item)}
-            className={`flex h-8 w-full items-center rounded-[var(--radius-sm)] px-2 text-left text-[13px] ${
-              section === item ? "bg-surface-1" : "text-ink-muted hover:text-ink"
-            }`}
-          >
-            {item}
-          </button>
-        ))}
-      </aside>
-      <div className="flex-1 overflow-auto p-6">
-        {section === "Система" && <SystemStatus />}
-        {section === "Рабочее пространство" && (
-          <div className="max-w-lg space-y-3">
-            <h1 className="text-[18px] font-medium">Рабочее пространство</h1>
-            <Label>Название</Label>
-            <Input value={workspace?.name ?? ""} readOnly />
-            <Label>Slug</Label>
-            <Input value={workspace?.slug ?? ""} readOnly />
-          </div>
-        )}
-        {section === "Участники" && (
-          <div>
-            <h1 className="text-[18px] font-medium">Участники</h1>
-            <div className="mt-3 rounded-[var(--radius-md)] border border-line px-3 py-2 text-[13px]">
-              {user?.name} · {user?.email} · {workspace?.role ?? "owner"}
-            </div>
-          </div>
-        )}
-        {section === "ИИ-модель" && <AIProvidersStatus />}
-        {section === "Источники данных" && (
-          <div className="max-w-lg space-y-2 text-[13px]">
-            <h1 className="text-[18px] font-medium">Источники данных</h1>
-            <p className="text-ink-muted">Провайдеры обогащения, настроенные на сервере.</p>
-            {dataProviders === null ? <p className="text-ink-muted">Загружаем список…</p> : dataProviders.length ? dataProviders.map((provider) => (
-              <div key={provider.id} className="flex items-center justify-between gap-3 border-b border-line py-3">
-                <div><p className="font-medium">{provider.name}</p><p className="text-xs text-ink-muted">Регион: {provider.region} · операций: {provider.operations.length}</p></div>
-                <span className={provider.available ? "text-success" : "text-ink-muted"}>{provider.available ? "Доступен" : provider.configured ? "Нет соединения" : "Не настроен"}</span>
+    <div className="h-full min-h-0 overflow-y-auto overscroll-y-contain">
+      <div className="mx-auto max-w-6xl px-4 pt-4 pb-8 sm:px-8 sm:pt-7">
+        <h1 className="text-3xl font-semibold tracking-tight">Настройки</h1>
+        <div className="mt-4 grid gap-4 md:mt-6 md:grid-cols-[13rem_minmax(0,1fr)] md:gap-5">
+          <label className="grid gap-1 text-sm text-ink-muted md:hidden">
+            Раздел
+            <select className={selectClass} value={section} onChange={(event) => setParams({ section: event.target.value })}>
+              {Object.entries(SECTIONS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+            </select>
+          </label>
+          <nav aria-label="Настройки" className="hidden flex-col items-start gap-1 self-start md:flex">
+            {Object.entries(SECTIONS).map(([id, label]) => (
+              <button key={id} type="button" aria-current={section === id ? "page" : undefined}
+                onClick={() => setParams({ section: id })}
+                className={`min-h-9 rounded-md px-3 py-2 text-left text-sm md:w-full ${section === id ? "bg-accent-soft font-medium text-accent" : "text-ink-muted hover:bg-surface-1 hover:text-ink"}`}>
+                {label}
+              </button>
+            ))}
+          </nav>
+          <div className="min-w-0 rounded-xl border border-line bg-surface-0 p-4 sm:p-6" key={section}>
+            {section === "system" && <SystemStatus />}
+            {section === "account" && (
+              <div className="max-w-lg space-y-4">
+                <h2 className="text-lg font-medium">Аккаунт</h2>
+                <dl className="grid gap-3 text-sm">
+                  <div><dt className="text-ink-muted">Имя</dt><dd>{user?.name ?? "—"}</dd></div>
+                  <div><dt className="text-ink-muted">Email</dt><dd className="wrap-anywhere">{user?.email ?? "—"}</dd></div>
+                  <div><dt className="text-ink-muted">Рабочее пространство</dt><dd>{workspace?.name ?? "—"}</dd></div>
+                  <div><dt className="text-ink-muted">Уровень доступа</dt><dd>{workspace?.role === "owner" ? "Владелец" : workspace?.role === "admin" ? "Администратор" : workspace?.role === "viewer" ? "Чтение" : "Участник"}</dd></div>
+                </dl>
               </div>
-            )) : <p className="text-ink-muted">Список провайдеров недоступен.</p>}
+            )}
+            {section === "analysis" && (
+              <section className="max-w-lg space-y-4">
+                <h2 className="text-lg font-medium">Анализ клиентов</h2>
+                <p className="text-sm text-ink-muted">Настройки поиска публикаций, ключевые слова и расписание доступны в интеграции SearXNG.</p>
+                <Button asChild size="sm" variant="secondary"><Link to="/app/integrations#search">Настроить поиск</Link></Button>
+              </section>
+            )}
+            {section === "assistant" && (
+              <section className="max-w-lg space-y-4">
+                <h2 className="text-lg font-medium">ИИ-помощник</h2>
+                <label className="flex items-center justify-between gap-4 text-sm">
+                  Отправлять вопрос клавишей Enter
+                  <Switch checked={preferences.sendOnEnter} onCheckedChange={preferences.setSendOnEnter} />
+                </label>
+                <p className="text-sm text-ink-muted">Shift + Enter добавляет новую строку. Настройка применяется к рабочему чату и чату по клиенту.</p>
+              </section>
+            )}
+            {section === "appearance" && (
+              <section className="max-w-lg space-y-4">
+                <h2 className="text-lg font-medium">Внешний вид</h2>
+                <label className="grid gap-1.5 text-sm">
+                  Цветовая тема
+                  <select className={selectClass} value={theme} onChange={(event) => setTheme(event.target.value as typeof theme)}>
+                    <option value="light">Светлая</option><option value="dark">Тёмная</option><option value="system">Как в системе</option>
+                  </select>
+                </label>
+                <label className="flex items-center justify-between gap-4 text-sm">
+                  Уменьшить прозрачность
+                  <Switch checked={reduceTransparency} onCheckedChange={setReduceTransparency} />
+                </label>
+              </section>
+            )}
           </div>
-        )}
-        {section === "Безопасность" && (
-          <div>
-            <h1 className="text-[18px] font-medium">Безопасность</h1>
-            <p className="mt-2 max-w-lg text-[13px] text-ink-muted">Вход выполняется по одноразовой ссылке на почту. Срок JWT-сессии и секреты управляются backend.</p>
-            <div className="mt-4 max-w-lg border-t border-line py-3 text-[13px]">Аккаунт <span className="float-right text-ink-muted">{user?.email ?? "—"}</span></div>
-          </div>
-        )}
-        {section === "Внешний вид" && (
-          <div className="max-w-lg space-y-4">
-            <h1 className="text-[18px] font-medium">Внешний вид</h1>
-            <div className="flex gap-2">
-              {(["light", "dark", "system"] as const).map((item) => (
-                <Button key={item} size="sm" variant={theme === item ? "secondary" : "ghost"} onClick={() => setTheme(item)}>
-                  {item === "light" ? "Светлая" : item === "dark" ? "Тёмная" : "Как в системе"}
-                </Button>
-              ))}
-            </div>
-            <label className="flex items-center justify-between text-[13px]">
-              Уменьшить прозрачность
-              <Switch checked={reduceTransparency} onCheckedChange={setReduceTransparency} />
-            </label>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
