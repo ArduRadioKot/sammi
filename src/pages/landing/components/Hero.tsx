@@ -3,7 +3,6 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Reveal } from "@/components/motion/Reveal";
 import { ProductScreenshot } from "./ProductScreenshot";
-import { SilkGradient } from "./SilkGradient";
 import { stakeholderShot } from "./landingShots";
 
 const VIEWS = [
@@ -33,7 +32,6 @@ export function Hero() {
 
   return (
     <section className="route-hero">
-      <SilkGradient />
       <div className="route-wrap relative">
         <div className="route-hero-copy">
           <Reveal>

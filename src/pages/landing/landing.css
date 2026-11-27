@@ -1,4 +1,17 @@
 .landing {
+  --bg: #17141f;
+  --surface-0: #211c2c;
+  --surface-1: #2b2537;
+  --brand-void: #17141f;
+  --brand-deep: #211c2c;
+  --brand-forest: #211c2c;
+  --ink: #f7f5fb;
+  --ink-muted: #ccc4d7;
+  --ink-faint: #aaa0b8;
+  --accent: #b7a7ff;
+  --line: #40364f;
+  color: var(--ink);
+  background: var(--bg);
   --route-gutter: clamp(18px, 4vw, 64px);
   --route-text: clamp(1rem, 1.45vw, 1.1875rem);
   --route-caption: 0.875rem;
@@ -14,7 +27,49 @@
 }
 
 .route-landing :is(section, figure, main)[id] {
-  scroll-margin-top: 24px;
+  scroll-margin-top: 100px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html:has(.route-landing) { scroll-behavior: smooth; }
+}
+
+.landing > .route-nav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--bg);
+  box-shadow: 0 0 0 100vmax var(--bg);
+  clip-path: inset(0 -100vmax);
+}
+
+.route-back-top {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 31;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--ink-100);
+}
+
+[data-theme="light"] .landing {
+  --bg: #faf9fc;
+  --surface-0: #ffffff;
+  --surface-1: #efedf4;
+  --brand-forest: #ffffff;
+  --brand-deep: #efedf4;
+  --brand-void: #faf9fc;
+  --ink: #151515;
+  --ink-muted: #51485e;
+  --ink-faint: #675d75;
+  --line: rgba(21, 21, 21, 0.16);
+  --accent: #b7a7ff;
+  color: var(--ink);
 }
 
 .route-skip {
@@ -89,6 +144,7 @@
 .route-hero {
   position: relative;
   isolation: isolate;
+  background: radial-gradient(ellipse at 75% 15%, rgba(150, 124, 255, 0.09), transparent 65%), var(--bg);
   padding-block: clamp(26px, 4.4vw, 72px) clamp(52px, 6vw, 95px);
 }
 
@@ -164,6 +220,7 @@
   padding: clamp(10px, 1.5vw, 22px);
   border-radius: var(--route-radius);
   background: var(--brand-forest);
+  border: 1px solid var(--line);
 }
 
 .route-demo-bar,

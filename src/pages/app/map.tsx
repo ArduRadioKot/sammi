@@ -295,7 +295,7 @@ export default function MapPage() {
 
       {error && <p className="text-[13px] text-warning">{error}</p>}
 
-      <div className="relative min-h-96 flex-1 overflow-hidden rounded-[var(--radius-md)] border border-border bg-surface-0">
+      <div className="relative isolate min-h-96 flex-1 overflow-hidden rounded-[var(--radius-md)] border border-border bg-surface-0">
         {mapLoading && (
           <div className="absolute inset-0 z-[1000] grid place-items-center bg-surface-0/70 text-[13px] text-ink-muted">
             Загрузка точек…

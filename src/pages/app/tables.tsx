@@ -16,7 +16,8 @@ import { ru as ruLocale } from "date-fns/locale";
 import { MoreHorizontal } from "lucide-react";
 import type { DataTable, TableType } from "@/types/domain";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { createTableSchema, type CreateTableForm } from "@/lib/schemas";
 import { useAuthStore } from "@/stores/auth-store";
@@ -204,15 +205,22 @@ export default function TablesPage() {
             <Label className="mt-3 block" htmlFor="table-type">
               Тип
             </Label>
-            <select
-              id="table-type"
-              className="mt-1 h-8 w-full rounded-[var(--radius-sm)] border border-line bg-surface-0 px-2.5 text-[13px]"
-              {...createForm.register("type")}
-            >
-              <option value="companies">Companies</option>
-              <option value="people">People</option>
-              <option value="custom">Custom</option>
-            </select>
+            <Controller
+              name="type"
+              control={createForm.control}
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger id="table-type" ref={field.ref} onBlur={field.onBlur} className="mt-1 h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="companies">Компании</SelectItem>
+                    <SelectItem value="people">Люди</SelectItem>
+                    <SelectItem value="custom">Своя структура</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            />
             <Button className="mt-3" type="submit">
               Создать
             </Button>
